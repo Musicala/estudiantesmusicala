@@ -1,0 +1,276 @@
+/* --------- Base --------- */
+
+:root {
+  --azul-mozart: #0c41c4;
+  --violeta-beethoven: #680dbf;
+  --magenta-brahms: #ce0071;
+  --azul-wagner: #0c0a1e;
+  --gris-haydn: #e6e8e8;
+  --blanco-debussy: #f9f9f9;
+  --texto-principal: #232323;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Roboto", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  background: var(--blanco-debussy);
+  color: var(--texto-principal);
+}
+
+/* --------- Topbar --------- */
+
+.topbar {
+  background: linear-gradient(
+    90deg,
+    var(--azul-mozart),
+    var(--violeta-beethoven),
+    var(--magenta-brahms)
+  );
+  color: white;
+  padding: 10px 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.topbar-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-logo {
+  height: 42px;
+  width: auto;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-title {
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  font-size: 1.1rem;
+}
+
+.brand-subtitle {
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+.tagline span {
+  font-family: "Sacramento", cursive;
+  font-size: 1.6rem;
+}
+
+/* --------- Layout principal --------- */
+
+.page {
+  max-width: 1200px;
+  margin: 20px auto 32px;
+  padding: 0 16px;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.07);
+  padding: 20px 20px 24px;
+}
+
+/* --------- Header de tarjeta --------- */
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.card-header h1 {
+  font-size: 1.4rem;
+  margin: 0 0 6px;
+}
+
+.card-description {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.stats {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.stat-pill {
+  background: rgba(12, 65, 196, 0.06);
+  border: 1px solid rgba(12, 65, 196, 0.3);
+  border-radius: 999px;
+  padding: 6px 14px;
+  display: inline-flex;
+  flex-direction: column;
+  min-width: 110px;
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #555;
+}
+
+.stat-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--azul-mozart);
+}
+
+/* --------- Barra de herramientas --------- */
+
+.table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.toolbar-label {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input-search {
+  border-radius: 999px;
+  border: 1px solid #ccc;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  min-width: 230px;
+  outline: none;
+  transition: border 0.15s, box-shadow 0.15s;
+}
+
+.input-search:focus {
+  border-color: var(--azul-mozart);
+  box-shadow: 0 0 0 2px rgba(12, 65, 196, 0.1);
+}
+
+.status-message {
+  font-size: 0.78rem;
+  color: #666;
+}
+
+/* --------- Tabla --------- */
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Estilos DataTables básicos adaptados a Musicala */
+
+.dataTables_wrapper .dataTables_length label,
+.dataTables_wrapper .dataTables_info {
+  font-size: 0.8rem;
+}
+
+/* Ocultamos el buscador nativo de DataTables (usamos el nuestro) */
+.dataTables_wrapper .dataTables_filter {
+  display: none;
+}
+
+table.dataTable {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.82rem;
+}
+
+table.dataTable thead th {
+  background: linear-gradient(
+    90deg,
+    rgba(12, 65, 196, 0.08),
+    rgba(104, 13, 191, 0.08)
+  );
+  border-bottom: 2px solid rgba(12, 65, 196, 0.25);
+  color: var(--azul-wagner);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+table.dataTable tbody tr:nth-child(even) {
+  background-color: #fafafa;
+}
+
+table.dataTable tbody tr:hover {
+  background-color: rgba(12, 65, 196, 0.06);
+}
+
+/* Paginación */
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  padding: 3px 8px;
+  margin-left: 3px;
+  border-radius: 999px !important;
+  border: 1px solid transparent;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: var(--azul-mozart) !important;
+  color: #fff !important;
+  border-color: var(--azul-mozart) !important;
+}
+
+/* --------- Footer --------- */
+
+.footer {
+  margin-top: 14px;
+  font-size: 0.8rem;
+  color: #777;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* --------- Responsive --------- */
+
+@media (max-width: 768px) {
+  .topbar-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tagline span {
+    font-size: 1.3rem;
+  }
+
+  .card-header {
+    flex-direction: column;
+  }
+
+  .stat-pill {
+    align-self: flex-start;
+  }
+}

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Estudiantes inscritos – Musicala 2025</title>
+
+  <!-- Tipografías Musicala -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Sacramento&display=swap"
+    rel="stylesheet"
+  >
+
+  <!-- DataTables + jQuery -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css"
+  />
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+
+  <!-- Estilos propios -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Barra superior con logo -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <img src="logo.png" alt="Musicala" class="brand-logo">
+        <div class="brand-text">
+          <span class="brand-title">Musicala</span>
+          <span class="brand-subtitle">Panel de Inscripciones 2025</span>
+        </div>
+      </div>
+      <div class="tagline">
+        <span>vida, alma y música</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Contenido principal -->
+  <main class="page">
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h1>Estudiantes inscritos</h1>
+          <p class="card-description">
+            Consulta rápida de todos los estudiantes registrados por formulario.
+            Solo lectura, ideal para buscar teléfonos, acudientes y datos de contacto.
+          </p>
+        </div>
+        <div class="stats">
+          <div class="stat-pill">
+            <span class="stat-label">Total registros</span>
+            <span class="stat-value" id="totalRegistros">–</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Herramientas de tabla -->
+      <div class="table-toolbar">
+        <div class="toolbar-left">
+          <label class="toolbar-label">
+            Buscar:
+            <input
+              type="text"
+              id="customSearch"
+              class="input-search"
+              placeholder="Nombre, acudiente, correo, sede..."
+            />
+          </label>
+        </div>
+        <div id="statusMessage" class="status-message">
+          Cargando datos de estudiantes…
+        </div>
+      </div>
+
+      <!-- Tabla -->
+      <div class="table-wrapper">
+        <table id="tablaEstudiantes" class="display cell-border compact" style="width:100%">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>Musicala · Estudiantes 2025</span>
+      <span>Datos sincronizados desde Google Sheets (solo lectura)</span>
+    </footer>
+  </main>
+
+  <!-- Lógica -->
+  <script src="app.js"></script>
+</body>
+</html>
