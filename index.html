@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>Estudiantes inscritos – Musicala 2025</title>
+  <meta name="description" content="Panel de consulta (solo lectura) de estudiantes inscritos en Musicala 2025. Búsqueda rápida y orden por el orden original del Sheet." />
+  <meta name="theme-color" content="#0C41C4" />
 
   <!-- Tipografías Musicala -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,36 +27,42 @@
   <!-- Estilos propios -->
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
-  <!-- Barra superior con logo -->
-  <header class="topbar">
+  <!-- Accesibilidad: saltar a contenido -->
+  <a class="skip-link" href="#mainContent">Saltar al contenido</a>
+
+  <!-- Barra superior -->
+  <header class="topbar" role="banner">
     <div class="topbar-inner">
       <div class="brand">
-        <img src="logo.png" alt="Musicala" class="brand-logo">
+        <img src="logo.png" alt="Musicala" class="brand-logo" loading="eager" decoding="async">
         <div class="brand-text">
           <span class="brand-title">Musicala</span>
           <span class="brand-subtitle">Panel de Inscripciones 2025</span>
         </div>
       </div>
-      <div class="tagline">
+
+      <div class="tagline" aria-label="Slogan de Musicala">
         <span>vida, alma y música</span>
       </div>
     </div>
   </header>
 
   <!-- Contenido principal -->
-  <main class="page">
-    <section class="card">
+  <main class="page" id="mainContent" role="main">
+    <section class="card" aria-labelledby="pageTitle">
       <div class="card-header">
         <div>
-          <h1>Estudiantes inscritos</h1>
+          <h1 id="pageTitle">Estudiantes inscritos</h1>
           <p class="card-description">
             Consulta rápida de todos los estudiantes registrados por formulario.
             Solo lectura, ideal para buscar teléfonos, acudientes y datos de contacto.
           </p>
         </div>
-        <div class="stats">
-          <div class="stat-pill">
+
+        <div class="stats" aria-label="Estadísticas">
+          <div class="stat-pill" title="Cantidad total de filas cargadas">
             <span class="stat-label">Total registros</span>
             <span class="stat-value" id="totalRegistros">–</span>
           </div>
@@ -61,37 +70,64 @@
       </div>
 
       <!-- Herramientas de tabla -->
-      <div class="table-toolbar">
+      <div class="table-toolbar" role="region" aria-label="Herramientas de tabla">
         <div class="toolbar-left">
-          <label class="toolbar-label">
+          <label class="toolbar-label" for="customSearch">
             Buscar:
             <input
               type="text"
               id="customSearch"
               class="input-search"
               placeholder="Nombre, acudiente, correo, sede..."
+              autocomplete="off"
+              inputmode="search"
             />
           </label>
+
+          <!-- NUEVO: Orden del Sheet -->
+          <div class="order-tools" aria-label="Orden del Sheet">
+            <button id="btnOrderSheetAsc" class="btn btn-ghost" type="button" title="Orden tal cual el Sheet">
+              Orden Sheet ↑
+            </button>
+            <button id="btnOrderSheetDesc" class="btn btn-ghost" type="button" title="Orden inverso al Sheet">
+              Orden Sheet ↓
+            </button>
+          </div>
         </div>
-        <div id="statusMessage" class="status-message">
+
+        <div id="statusMessage" class="status-message" aria-live="polite">
           Cargando datos de estudiantes…
         </div>
       </div>
 
       <!-- Tabla -->
-      <div class="table-wrapper">
-        <table id="tablaEstudiantes" class="display cell-border compact" style="width:100%">
+      <div class="table-wrapper" role="region" aria-label="Tabla de estudiantes">
+        <table
+          id="tablaEstudiantes"
+          class="display cell-border compact"
+          style="width:100%"
+          aria-describedby="tableHint"
+        >
           <thead></thead>
           <tbody></tbody>
         </table>
+        <p id="tableHint" class="table-hint">
+          Tip: usa “Orden Sheet ↑/↓” para volver al orden original del documento, incluso si estás filtrando o buscando.
+        </p>
       </div>
     </section>
 
-    <footer class="footer">
+    <footer class="footer" role="contentinfo">
       <span>Musicala · Estudiantes 2025</span>
       <span>Datos sincronizados desde Google Sheets (solo lectura)</span>
     </footer>
   </main>
+
+  <noscript>
+    <div class="noscript">
+      Este panel necesita JavaScript activado para cargar la tabla.
+    </div>
+  </noscript>
 
   <!-- Lógica -->
   <script src="app.js"></script>
