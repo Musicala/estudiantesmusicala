@@ -1,4 +1,14 @@
-/* --------- Base --------- */
+/* =============================================================================
+  styles.css — Estudiantes Musicala (Panel Inscripciones) v2 ✨
+  -----------------------------------------------------------------------------
+  Objetivo:
+   - UI limpia, gerencial y humana (sin volverse corporativo muerto).
+   - Mejor lectura de tablas largas.
+   - Accesibilidad: focus visible, skip-link, reduce motion.
+   - Compat con index.html mejorado + app.js (Orden Sheet + hint + status).
+============================================================================= */
+
+/* --------- Tokens / Base --------- */
 
 :root {
   --azul-mozart: #0c41c4;
@@ -8,6 +18,21 @@
   --gris-haydn: #e6e8e8;
   --blanco-debussy: #f9f9f9;
   --texto-principal: #232323;
+
+  /* Extras UI */
+  --muted: #666;
+  --muted-2: #777;
+  --card: #ffffff;
+  --border: rgba(12, 10, 30, 0.10);
+  --shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
+  --shadow-soft: 0 6px 18px rgba(0, 0, 0, 0.06);
+
+  --focus: rgba(12, 65, 196, 0.22);
+  --radius: 14px;
+  --radius-pill: 999px;
+
+  --table-header-bg-1: rgba(12, 65, 196, 0.08);
+  --table-header-bg-2: rgba(104, 13, 191, 0.08);
 }
 
 *,
@@ -16,12 +41,53 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
-  font-family: "Roboto", system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+  font-family: "Roboto", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   background: var(--blanco-debussy);
   color: var(--texto-principal);
+  line-height: 1.35;
+}
+
+/* Accesibilidad: reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Accesibilidad: skip link */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -100px;
+  z-index: 9999;
+  background: #fff;
+  color: var(--azul-wagner);
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(12, 65, 196, 0.22);
+  box-shadow: var(--shadow-soft);
+  text-decoration: none;
+  font-weight: 600;
+  transition: top 0.15s, box-shadow 0.15s;
+}
+
+.skip-link:focus {
+  top: 12px;
+  box-shadow: 0 0 0 3px var(--focus), var(--shadow-soft);
+  outline: none;
 }
 
 /* --------- Topbar --------- */
@@ -35,7 +101,7 @@ body {
   );
   color: white;
   padding: 10px 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
 }
 
 .topbar-inner {
@@ -56,6 +122,7 @@ body {
 .brand-logo {
   height: 42px;
   width: auto;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.15));
 }
 
 .brand-text {
@@ -64,19 +131,21 @@ body {
 }
 
 .brand-title {
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.03em;
   font-size: 1.1rem;
 }
 
 .brand-subtitle {
-  font-size: 0.8rem;
-  opacity: 0.9;
+  font-size: 0.82rem;
+  opacity: 0.92;
 }
 
 .tagline span {
   font-family: "Sacramento", cursive;
   font-size: 1.6rem;
+  opacity: 0.95;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.18);
 }
 
 /* --------- Layout principal --------- */
@@ -88,10 +157,11 @@ body {
 }
 
 .card {
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.07);
-  padding: 20px 20px 24px;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 20px 18px;
+  border: 1px solid var(--border);
 }
 
 /* --------- Header de tarjeta --------- */
@@ -105,30 +175,33 @@ body {
 }
 
 .card-header h1 {
-  font-size: 1.4rem;
+  font-size: 1.45rem;
   margin: 0 0 6px;
+  letter-spacing: 0.01em;
 }
 
 .card-description {
   margin: 0;
-  font-size: 0.9rem;
-  color: #666;
+  font-size: 0.92rem;
+  color: var(--muted);
+  max-width: 68ch;
 }
 
 .stats {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .stat-pill {
   background: rgba(12, 65, 196, 0.06);
-  border: 1px solid rgba(12, 65, 196, 0.3);
-  border-radius: 999px;
-  padding: 6px 14px;
+  border: 1px solid rgba(12, 65, 196, 0.28);
+  border-radius: var(--radius-pill);
+  padding: 7px 14px;
   display: inline-flex;
   flex-direction: column;
-  min-width: 110px;
+  min-width: 120px;
 }
 
 .stat-label {
@@ -139,8 +212,8 @@ body {
 }
 
 .stat-value {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1.12rem;
+  font-weight: 700;
   color: var(--azul-mozart);
 }
 
@@ -153,33 +226,92 @@ body {
   gap: 12px;
   margin-bottom: 10px;
   flex-wrap: wrap;
+  padding-top: 2px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .toolbar-label {
-  font-size: 0.85rem;
+  font-size: 0.86rem;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  color: var(--azul-wagner);
+  font-weight: 500;
 }
 
 .input-search {
-  border-radius: 999px;
-  border: 1px solid #ccc;
-  padding: 6px 12px;
-  font-size: 0.85rem;
-  min-width: 230px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(12, 10, 30, 0.18);
+  padding: 8px 12px;
+  font-size: 0.86rem;
+  min-width: 260px;
   outline: none;
-  transition: border 0.15s, box-shadow 0.15s;
+  background: #fff;
+  transition: border 0.15s, box-shadow 0.15s, transform 0.05s;
 }
 
 .input-search:focus {
-  border-color: var(--azul-mozart);
-  box-shadow: 0 0 0 2px rgba(12, 65, 196, 0.1);
+  border-color: rgba(12, 65, 196, 0.55);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.input-search:active {
+  transform: translateY(1px);
 }
 
 .status-message {
-  font-size: 0.78rem;
-  color: #666;
+  font-size: 0.8rem;
+  color: var(--muted);
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(12, 10, 30, 0.03);
+  border: 1px solid rgba(12, 10, 30, 0.06);
+}
+
+/* --------- Botones (Orden Sheet) --------- */
+
+.order-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btn {
+  border: 1px solid rgba(12, 65, 196, 0.25);
+  background: rgba(12, 65, 196, 0.06);
+  color: var(--azul-wagner);
+  padding: 8px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.05s, box-shadow 0.15s, background 0.15s, border-color 0.15s;
+  user-select: none;
+}
+
+.btn:hover {
+  border-color: rgba(12, 65, 196, 0.45);
+  background: rgba(12, 65, 196, 0.10);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.7);
 }
 
 /* --------- Tabla --------- */
@@ -187,13 +319,22 @@ body {
 .table-wrapper {
   width: 100%;
   overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(12, 10, 30, 0.06);
 }
 
-/* Estilos DataTables básicos adaptados a Musicala */
+/* Hint debajo de tabla */
+.table-hint {
+  margin: 10px 2px 0;
+  font-size: 0.82rem;
+  color: var(--muted-2);
+}
 
+/* DataTables: tipografía */
 .dataTables_wrapper .dataTables_length label,
 .dataTables_wrapper .dataTables_info {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
 /* Ocultamos el buscador nativo de DataTables (usamos el nuestro) */
@@ -201,24 +342,45 @@ body {
   display: none;
 }
 
+/* Table base */
 table.dataTable {
   border-collapse: collapse;
   width: 100%;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
 }
 
+/* Header: gradiente suave + sticky */
 table.dataTable thead th {
   background: linear-gradient(
     90deg,
-    rgba(12, 65, 196, 0.08),
-    rgba(104, 13, 191, 0.08)
+    var(--table-header-bg-1),
+    var(--table-header-bg-2)
   );
-  border-bottom: 2px solid rgba(12, 65, 196, 0.25);
+  border-bottom: 2px solid rgba(12, 65, 196, 0.22);
   color: var(--azul-wagner);
-  font-weight: 600;
+  font-weight: 700;
+  white-space: nowrap;
+
+  /* Sticky header */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* Celdas: legibilidad + elipsis */
+table.dataTable td {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Hover: permitir ver contenido largo */
+table.dataTable td:hover {
+  white-space: normal;
+}
+
+/* Filas */
 table.dataTable tbody tr:nth-child(even) {
   background-color: #fafafa;
 }
@@ -227,12 +389,13 @@ table.dataTable tbody tr:hover {
   background-color: rgba(12, 65, 196, 0.06);
 }
 
-/* Paginación */
+/* DataTables: paginación */
 .dataTables_wrapper .dataTables_paginate .paginate_button {
-  padding: 3px 8px;
-  margin-left: 3px;
-  border-radius: 999px !important;
-  border: 1px solid transparent;
+  padding: 4px 10px;
+  margin-left: 4px;
+  border-radius: var(--radius-pill) !important;
+  border: 1px solid transparent !important;
+  font-size: 0.84rem;
 }
 
 .dataTables_wrapper .dataTables_paginate .paginate_button.current,
@@ -242,19 +405,51 @@ table.dataTable tbody tr:hover {
   border-color: var(--azul-mozart) !important;
 }
 
+/* DataTables: select (cantidad por página) */
+.dataTables_wrapper select {
+  border-radius: 10px;
+  border: 1px solid rgba(12, 10, 30, 0.16);
+  padding: 4px 8px;
+}
+
+/* DataTables: focus dentro de la tabla */
+table.dataTable tbody td:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(12, 65, 196, 0.22);
+}
+
 /* --------- Footer --------- */
 
 .footer {
   margin-top: 14px;
-  font-size: 0.8rem;
-  color: #777;
+  font-size: 0.82rem;
+  color: var(--muted-2);
   display: flex;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+  padding: 10px 2px 0;
+}
+
+/* --------- Noscript --------- */
+
+.noscript {
+  max-width: 1200px;
+  margin: 14px auto 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(206, 0, 113, 0.08);
+  border: 1px solid rgba(206, 0, 113, 0.20);
+  color: var(--azul-wagner);
 }
 
 /* --------- Responsive --------- */
+
+@media (max-width: 900px) {
+  .card-description {
+    max-width: 60ch;
+  }
+}
 
 @media (max-width: 768px) {
   .topbar-inner {
@@ -272,5 +467,32 @@ table.dataTable tbody tr:hover {
 
   .stat-pill {
     align-self: flex-start;
+  }
+
+  .input-search {
+    min-width: 200px;
+    width: 100%;
+  }
+
+  .status-message {
+    width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .brand-logo {
+    height: 38px;
+  }
+
+  .brand-title {
+    font-size: 1.02rem;
+  }
+
+  .tagline span {
+    font-size: 1.15rem;
+  }
+
+  .card {
+    padding: 16px 14px 14px;
   }
 }
