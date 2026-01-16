@@ -84,7 +84,7 @@
             />
           </label>
 
-          <!-- NUEVO: Orden del Sheet -->
+          <!-- Orden del Sheet -->
           <div class="order-tools" aria-label="Orden del Sheet">
             <button id="btnOrderSheetAsc" class="btn btn-ghost" type="button" title="Orden tal cual el Sheet">
               Orden Sheet ↑
@@ -113,6 +113,7 @@
         </table>
         <p id="tableHint" class="table-hint">
           Tip: usa “Orden Sheet ↑/↓” para volver al orden original del documento, incluso si estás filtrando o buscando.
+          También puedes dar clic en un estudiante para abrir su ficha.
         </p>
       </div>
     </section>
@@ -122,6 +123,61 @@
       <span>Datos sincronizados desde Google Sheets (solo lectura)</span>
     </footer>
   </main>
+
+  <!-- =========================================================
+       Drawer: Ficha del estudiante (clic en fila)
+       - Se abre con JS (class .is-open)
+       - Cierra con botón, click afuera, o ESC
+  ========================================================== -->
+  <aside id="studentDrawer" class="drawer" aria-hidden="true" aria-label="Ficha del estudiante">
+    <div class="drawer__backdrop" data-close-drawer></div>
+
+    <div class="drawer__panel" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+      <div class="drawer__header">
+        <div class="drawer__titlewrap">
+          <h2 id="drawerTitle" class="drawer__title">Ficha</h2>
+          <p id="drawerSubtitle" class="drawer__subtitle">—</p>
+        </div>
+
+        <button class="drawer__close btn btn-ghost" type="button" data-close-drawer aria-label="Cerrar">
+          Cerrar ✕
+        </button>
+      </div>
+
+      <div class="drawer__content">
+        <div class="drawer__primary" aria-label="Información principal">
+          <div class="primary__grid">
+            <div class="primary__item">
+              <span class="primary__label">Nombre</span>
+              <span class="primary__value" id="pNombre">—</span>
+            </div>
+
+            <div class="primary__item">
+              <span class="primary__label">Teléfono</span>
+              <span class="primary__value" id="pTel">—</span>
+              <div class="primary__actions" id="pTelActions"></div>
+            </div>
+
+            <div class="primary__item">
+              <span class="primary__label">Acudiente</span>
+              <span class="primary__value" id="pAcudiente">—</span>
+            </div>
+
+            <div class="primary__item">
+              <span class="primary__label">Tel. acudiente</span>
+              <span class="primary__value" id="pTelAcudiente">—</span>
+              <div class="primary__actions" id="pTelAcudienteActions"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="drawer__all">
+          <h3 class="drawer__sectionTitle">Todos los campos</h3>
+          <dl id="drawerFields" class="kv"></dl>
+        </div>
+      </div>
+    </div>
+  </aside>
 
   <noscript>
     <div class="noscript">
