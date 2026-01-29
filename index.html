@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <title>Estudiantes inscritos – Musicala 2026</title>
-  <meta name="description" content="Panel de consulta (solo lectura) de estudiantes inscritos en Musicala 2026. Búsqueda rápida y orden por el orden original del Sheet." />
+  <meta name="description" content="Panel de consulta (solo lectura) de estudiantes inscritos en Musicala 2026." />
   <meta name="theme-color" content="#0C41C4" />
 
-  <!-- Tipografías Musicala -->
+  <!-- Tipografías -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -17,10 +17,7 @@
   >
 
   <!-- DataTables + jQuery -->
-  <link
-    rel="stylesheet"
-    href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css"
-  />
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" />
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 
@@ -29,10 +26,10 @@
 </head>
 
 <body>
-  <!-- Accesibilidad: saltar a contenido -->
+  <!-- Accesibilidad -->
   <a class="skip-link" href="#mainContent">Saltar al contenido</a>
 
-  <!-- Barra superior -->
+  <!-- Topbar -->
   <header class="topbar" role="banner">
     <div class="topbar-inner">
       <div class="brand">
@@ -49,15 +46,15 @@
     </div>
   </header>
 
-  <!-- Contenido principal -->
+  <!-- Main -->
   <main class="page" id="mainContent" role="main">
     <section class="card" aria-labelledby="pageTitle">
       <div class="card-header">
         <div>
           <h1 id="pageTitle">Estudiantes inscritos</h1>
           <p class="card-description">
-            Consulta rápida de todos los estudiantes registrados por formulario.
-            Solo lectura, ideal para buscar teléfonos, acudientes y datos de contacto.
+            Consulta rápida de estudiantes registrados por formulario. Solo lectura.
+            Usa búsqueda, filtros por Estado/Edad y descarga CSV cuando lo necesites.
           </p>
         </div>
 
@@ -69,9 +66,10 @@
         </div>
       </div>
 
-      <!-- Herramientas de tabla -->
+      <!-- Toolbar -->
       <div class="table-toolbar" role="region" aria-label="Herramientas de tabla">
         <div class="toolbar-left">
+          <!-- Search -->
           <label class="toolbar-label" for="customSearch">
             Buscar:
             <input
@@ -83,6 +81,38 @@
               inputmode="search"
             />
           </label>
+
+          <!-- Filtros específicos -->
+          <div class="toolbar-filters" aria-label="Filtros rápidos">
+            <label class="toolbar-label" for="filterEstado">
+              Estado (B):
+              <select id="filterEstado" class="dt-col-filter">
+                <option value="">Todos</option>
+              </select>
+            </label>
+
+            <label class="toolbar-label" for="filterEdad">
+              Edad (E):
+              <select id="filterEdad" class="dt-col-filter">
+                <option value="">Todas</option>
+              </select>
+            </label>
+          </div>
+
+          <!-- Actions -->
+          <div class="toolbar-actions" aria-label="Acciones rápidas">
+            <button id="btnClearSearch" class="btn btn-ghost" type="button" title="Borrar el texto de búsqueda">
+              Limpiar búsqueda
+            </button>
+
+            <button id="btnClearFilters" class="btn btn-ghost" type="button" title="Quitar filtros de Estado/Edad">
+              Limpiar filtros
+            </button>
+
+            <button id="btnDownloadCsv" class="btn" type="button" title="Descargar CSV (A y C-Z) ordenado por fecha AC">
+              Descargar CSV
+            </button>
+          </div>
 
           <!-- Orden del Sheet -->
           <div class="order-tools" aria-label="Orden del Sheet">
@@ -100,7 +130,7 @@
         </div>
       </div>
 
-      <!-- Tabla -->
+      <!-- Table -->
       <div class="table-wrapper" role="region" aria-label="Tabla de estudiantes">
         <table
           id="tablaEstudiantes"
@@ -111,9 +141,9 @@
           <thead></thead>
           <tbody></tbody>
         </table>
+
         <p id="tableHint" class="table-hint">
-          Tip: usa “Orden Sheet ↑/↓” para volver al orden original del documento, incluso si estás filtrando o buscando.
-          También puedes dar clic en un estudiante para abrir su ficha.
+          Tip: clic en una fila para abrir la ficha del estudiante. La búsqueda no es sensible a tildes.
         </p>
       </div>
     </section>
@@ -124,11 +154,7 @@
     </footer>
   </main>
 
-  <!-- =========================================================
-       Drawer: Ficha del estudiante (clic en fila)
-       - Se abre con JS (class .is-open)
-       - Cierra con botón, click afuera, o ESC
-  ========================================================== -->
+  <!-- Drawer / Ficha -->
   <aside id="studentDrawer" class="drawer" aria-hidden="true" aria-label="Ficha del estudiante">
     <div class="drawer__backdrop" data-close-drawer></div>
 
@@ -185,8 +211,6 @@
     </div>
   </noscript>
 
-  <!-- Lógica -->
   <script src="app.js"></script>
 </body>
 </html>
-
