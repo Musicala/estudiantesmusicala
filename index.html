@@ -4,20 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title>Estudiantes inscritos – Musicala 2026</title>
-  <meta name="description" content="Panel de consulta (solo lectura) de estudiantes inscritos en Musicala 2026." />
+  <title>Estudiantes inscritos · Musicala 2026</title>
+  <meta
+    name="description"
+    content="Panel de consulta de estudiantes inscritos en Musicala 2026. Búsqueda, filtros, fechas, estados y ficha detallada."
+  />
   <meta name="theme-color" content="#0C41C4" />
 
   <!-- Tipografías -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
     href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Sacramento&display=swap"
     rel="stylesheet"
-  >
+  />
 
   <!-- DataTables + jQuery -->
-  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" />
+  <link
+    rel="stylesheet"
+    href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css"
+  />
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 
@@ -26,14 +32,19 @@
 </head>
 
 <body>
-  <!-- Accesibilidad -->
   <a class="skip-link" href="#mainContent">Saltar al contenido</a>
 
   <!-- Topbar -->
   <header class="topbar" role="banner">
     <div class="topbar-inner">
-      <div class="brand">
-        <img src="logo.png" alt="Musicala" class="brand-logo" loading="eager" decoding="async">
+      <div class="brand" aria-label="Marca Musicala">
+        <img
+          src="logo.png"
+          alt="Logo Musicala"
+          class="brand-logo"
+          loading="eager"
+          decoding="async"
+        />
         <div class="brand-text">
           <span class="brand-title">Musicala</span>
           <span class="brand-subtitle">Panel de Inscripciones 2026</span>
@@ -50,16 +61,17 @@
   <main class="page" id="mainContent" role="main">
     <section class="card" aria-labelledby="pageTitle">
       <div class="card-header">
-        <div>
+        <div class="card-header-copy">
           <h1 id="pageTitle">Estudiantes inscritos</h1>
           <p class="card-description">
-            Consulta rápida de estudiantes registrados por formulario. Solo lectura.
-            Usa búsqueda, filtros por Estado/Edad y descarga CSV cuando lo necesites.
+            Consulta rápida de estudiantes registrados por formulario. Este panel es de
+            solo lectura y permite buscar, filtrar por estado, edad y fecha de
+            inscripción, además de abrir la ficha completa de cada estudiante.
           </p>
         </div>
 
-        <div class="stats" aria-label="Estadísticas">
-          <div class="stat-pill" title="Cantidad total de filas cargadas">
+        <div class="stats" aria-label="Resumen general">
+          <div class="stat-pill" title="Cantidad de registros visibles o cargados">
             <span class="stat-label">Total registros</span>
             <span class="stat-value" id="totalRegistros">–</span>
           </div>
@@ -67,75 +79,198 @@
       </div>
 
       <!-- Toolbar -->
-      <div class="table-toolbar" role="region" aria-label="Herramientas de tabla">
-        <div class="toolbar-left">
-          <!-- Search -->
-          <label class="toolbar-label" for="customSearch">
-            Buscar:
+<div class="table-toolbar table-toolbar--grouped" role="region" aria-label="Herramientas de tabla">
+  <div class="toolbar-main">
+    <!-- Columna izquierda -->
+    <div class="toolbar-stack">
+      <!-- Grupo: búsqueda -->
+      <section class="tool-group tool-group--search" aria-label="Búsqueda">
+        <div class="tool-group__header">
+          <span class="tool-group__title">Búsqueda</span>
+        </div>
+
+        <div class="tool-group__body">
+          <label class="toolbar-label toolbar-label--grow" for="customSearch">
+            <span class="toolbar-label__text">Buscar</span>
             <input
               type="text"
               id="customSearch"
               class="input-search"
-              placeholder="Nombre, acudiente, correo, sede..."
+              placeholder="Nombre, acudiente, teléfono, correo, sede..."
               autocomplete="off"
               inputmode="search"
             />
           </label>
 
-          <!-- Filtros específicos -->
-          <div class="toolbar-filters" aria-label="Filtros rápidos">
-            <label class="toolbar-label" for="filterEstado">
-              Estado (B):
-              <select id="filterEstado" class="dt-col-filter">
-                <option value="">Todos</option>
-              </select>
-            </label>
+          <button
+            id="btnClearSearch"
+            class="btn btn-ghost"
+            type="button"
+            title="Borrar texto de búsqueda"
+          >
+            Limpiar búsqueda
+          </button>
+        </div>
+      </section>
 
-            <label class="toolbar-label" for="filterEdad">
-              Edad (E):
-              <select id="filterEdad" class="dt-col-filter">
-                <option value="">Todas</option>
-              </select>
-            </label>
-          </div>
+      <!-- Grupo: filtros rápidos -->
+      <section class="tool-group" aria-label="Filtros rápidos">
+        <div class="tool-group__header">
+          <span class="tool-group__title">Filtros rápidos</span>
+        </div>
 
-          <!-- Actions -->
-          <div class="toolbar-actions" aria-label="Acciones rápidas">
-            <button id="btnClearSearch" class="btn btn-ghost" type="button" title="Borrar el texto de búsqueda">
-              Limpiar búsqueda
-            </button>
+        <div class="tool-group__body tool-group__body--wrap">
+          <label class="toolbar-label" for="filterEstado">
+            <span class="toolbar-label__text">Estado</span>
+            <select id="filterEstado" class="dt-col-filter">
+              <option value="">Todos</option>
+            </select>
+          </label>
 
-            <button id="btnClearFilters" class="btn btn-ghost" type="button" title="Quitar filtros de Estado/Edad">
-              Limpiar filtros
-            </button>
+          <label class="toolbar-label" for="filterEdad">
+            <span class="toolbar-label__text">Edad</span>
+            <select id="filterEdad" class="dt-col-filter">
+              <option value="">Todas</option>
+            </select>
+          </label>
 
-            <button id="btnDownloadCsv" class="btn" type="button" title="Descargar CSV (A y C-Z) ordenado por fecha AC">
-              Descargar CSV
-            </button>
-          </div>
+          <button
+            id="btnClearFilters"
+            class="btn btn-ghost"
+            type="button"
+            title="Quitar filtros de estado y edad"
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      </section>
 
-          <!-- Orden del Sheet -->
+      <!-- Grupo: filtros por fecha -->
+      <section class="tool-group" aria-label="Filtros por fecha">
+        <div class="tool-group__header">
+          <span class="tool-group__title">Fecha de inscripción</span>
+        </div>
+
+        <div class="tool-group__body tool-group__body--wrap">
+          <button
+            id="btnTodayInscriptions"
+            class="btn btn-ghost"
+            type="button"
+            title="Mostrar únicamente inscripciones nuevas del día"
+          >
+            Nuevas de hoy
+          </button>
+
+          <label class="toolbar-label" for="filterInscripcionFecha">
+            <span class="toolbar-label__text">Fecha</span>
+            <input
+              type="date"
+              id="filterInscripcionFecha"
+              class="input-search input-search--date"
+            />
+          </label>
+
+          <label class="toolbar-label" for="filterInscripcionMes">
+            <span class="toolbar-label__text">Mes</span>
+            <input
+              type="month"
+              id="filterInscripcionMes"
+              class="input-search input-search--date"
+            />
+          </label>
+
+          <button
+            id="btnClearDateFilters"
+            class="btn btn-ghost"
+            type="button"
+            title="Quitar filtros de fecha"
+          >
+            Limpiar fecha
+          </button>
+        </div>
+      </section>
+
+      <!-- Grupo: acciones -->
+      <section class="tool-group" aria-label="Acciones">
+        <div class="tool-group__header">
+          <span class="tool-group__title">Acciones</span>
+        </div>
+
+        <div class="tool-group__body tool-group__body--wrap">
+          <button
+            id="btnDownloadCsv"
+            class="btn"
+            type="button"
+            title="Descargar CSV filtrado y ordenado"
+          >
+            Descargar CSV
+          </button>
+
           <div class="order-tools" aria-label="Orden del Sheet">
-            <button id="btnOrderSheetAsc" class="btn btn-ghost" type="button" title="Orden tal cual el Sheet">
+            <button
+              id="btnOrderSheetAsc"
+              class="btn btn-ghost"
+              type="button"
+              title="Orden original del Sheet"
+            >
               Orden Sheet ↑
             </button>
-            <button id="btnOrderSheetDesc" class="btn btn-ghost" type="button" title="Orden inverso al Sheet">
+
+            <button
+              id="btnOrderSheetDesc"
+              class="btn btn-ghost"
+              type="button"
+              title="Orden inverso al Sheet"
+            >
               Orden Sheet ↓
             </button>
           </div>
         </div>
+      </section>
+    </div>
 
-        <div id="statusMessage" class="status-message" aria-live="polite">
-          Cargando datos de estudiantes…
+    <!-- Columna derecha -->
+    <aside class="toolbar-side" aria-label="Resumen">
+      <div class="stats">
+        <div class="stat-pill" title="Cantidad de registros visibles o cargados">
+          <span class="stat-label">Total registros</span>
+          <span class="stat-value" id="totalRegistros">–</span>
         </div>
       </div>
+    </aside>
+  </div>
+
+  <!-- Leyenda estados -->
+  <div class="status-legend" id="statusLegend" aria-label="Leyenda de estados">
+    <span class="legend-item">
+      <span class="status-dot is-activo" aria-hidden="true"></span>
+      Activo
+    </span>
+    <span class="legend-item">
+      <span class="status-dot is-activo-no-registro" aria-hidden="true"></span>
+      Activo no registro
+    </span>
+    <span class="legend-item">
+      <span class="status-dot is-pausa" aria-hidden="true"></span>
+      Activo en pausa
+    </span>
+    <span class="legend-item">
+      <span class="status-dot is-inactivo" aria-hidden="true"></span>
+      Inactivo
+    </span>
+  </div>
+
+  <div id="statusMessage" class="status-message" aria-live="polite">
+    Cargando datos de estudiantes…
+  </div>
+</div>
 
       <!-- Table -->
       <div class="table-wrapper" role="region" aria-label="Tabla de estudiantes">
         <table
           id="tablaEstudiantes"
           class="display cell-border compact"
-          style="width:100%"
+          style="width: 100%"
           aria-describedby="tableHint"
         >
           <thead></thead>
@@ -143,35 +278,53 @@
         </table>
 
         <p id="tableHint" class="table-hint">
-          Tip: clic en una fila para abrir la ficha del estudiante. La búsqueda no es sensible a tildes.
+          Tip: haz clic en una fila para abrir la ficha del estudiante. La búsqueda no
+          distingue tildes y los filtros de fecha pueden combinarse con los demás filtros.
         </p>
       </div>
     </section>
 
     <footer class="footer" role="contentinfo">
       <span>Musicala · Estudiantes 2026</span>
-      <span>Datos sincronizados desde Google Sheets (solo lectura)</span>
+      <span>Datos sincronizados desde Google Sheets · Solo lectura</span>
     </footer>
   </main>
 
   <!-- Drawer / Ficha -->
-  <aside id="studentDrawer" class="drawer" aria-hidden="true" aria-label="Ficha del estudiante">
+  <aside
+    id="studentDrawer"
+    class="drawer"
+    aria-hidden="true"
+    aria-label="Ficha del estudiante"
+  >
     <div class="drawer__backdrop" data-close-drawer></div>
 
-    <div class="drawer__panel" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+    <div
+      class="drawer__panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="drawerTitle"
+      aria-describedby="drawerSubtitle"
+    >
       <div class="drawer__header">
         <div class="drawer__titlewrap">
           <h2 id="drawerTitle" class="drawer__title">Ficha</h2>
-          <p id="drawerSubtitle" class="drawer__subtitle">—</p>
+          <p id="drawerSubtitle" class="drawer__subtitle">Ficha del estudiante</p>
         </div>
 
-        <button class="drawer__close btn btn-ghost" type="button" data-close-drawer aria-label="Cerrar">
+        <button
+          class="drawer__close btn btn-ghost"
+          type="button"
+          data-close-drawer
+          aria-label="Cerrar ficha"
+        >
           Cerrar ✕
         </button>
       </div>
 
       <div class="drawer__content">
-        <div class="drawer__primary" aria-label="Información principal">
+        <!-- Resumen principal -->
+        <section class="drawer__primary" aria-label="Información principal">
           <div class="primary__grid">
             <div class="primary__item">
               <span class="primary__label">Nombre</span>
@@ -195,12 +348,19 @@
               <div class="primary__actions" id="pTelAcudienteActions"></div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div class="drawer__all">
-          <h3 class="drawer__sectionTitle">Todos los campos</h3>
+        <!-- Todos los campos -->
+        <section class="drawer__all" aria-label="Todos los campos del registro">
+          <div class="drawer__sectionHead">
+            <h3 class="drawer__sectionTitle">Todos los campos</h3>
+            <p class="drawer__sectionHint">
+              Solo se mostrarán los campos que tengan información.
+            </p>
+          </div>
+
           <dl id="drawerFields" class="kv"></dl>
-        </div>
+        </section>
       </div>
     </div>
   </aside>

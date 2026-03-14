@@ -1,28 +1,28 @@
 'use strict';
 
 /* =============================================================================
-  app.js — Estudiantes inscritos (TSV → DataTables) v4.0
+  app.js — Estudiantes inscritos (TSV → DataTables) v5.0
   -----------------------------------------------------------------------------
   ✅ Carga TSV (Google Sheets publicado)
   ✅ Búsqueda NO sensible a tildes
-  ✅ Filtros específicos: Estado (B) y Edad (E)
+  ✅ Filtros específicos: Estado y Edad
+  ✅ Filtros nuevos: hoy / fecha exacta / mes de inscripción
   ✅ Opciones de filtros se actualizan con lo visible (dependientes)
-  ✅ Oculta columna A si está vacía en TODOS los registros
-  ✅ Descargar CSV:
-      - pregunta desde qué fecha (YYYY-MM-DD)
-      - aplica filtros actuales
-      - filtra por AC >= fecha
-      - ordena por AC desc
-      - exporta A y C..Z
+  ✅ Oculta columnas completamente vacías en la tabla
+  ✅ Drawer muestra solo campos con información
+  ✅ Ficha principal detectada por encabezados reales
+  ✅ Viñeta de color por estado
+  ✅ Descargar CSV respetando filtros actuales
 ============================================================================= */
 
 const TSV_URL =
   'https://docs.google.com/spreadsheets/d/e/2PACX-1vQQO-CBQoN1QZ4GFExJWmPz6YNLO6rhaIsWBv-Whlu9okpZRpcxfUtLYeAMKaiNOQJrrf3Vcwhk32kZ/pub?gid=2130299316&single=true&output=tsv';
 
 let dataTable = null;
-
 let HEADERS = [];
 let HEADER_INDEX = {};
+let ALL_ROWS = [];
+let EMPTY_COLUMN_INDEXES = new Set();
 
 const UI = {
   searchInput: 'customSearch',
@@ -35,12 +35,114 @@ const UI = {
   filterEdad: 'filterEdad',
   status: 'statusMessage',
   total: 'totalRegistros',
+
+  // Inyectados si no existen
+  btnToday: 'btnTodayInscriptions',
+  btnClearDate: 'btnClearDateFilters',
+  filterDate: 'filterInscripcionFecha',
+  filterMonth: 'filterInscripcionMes',
+  legend: 'statusLegend'
+};
+
+const DRAWER_IDS = {
+  drawer: 'studentDrawer',
+  title: 'drawerTitle',
+  subtitle: 'drawerSubtitle',
+  pNombre: 'pNombre',
+  pTel: 'pTel',
+  pAcudiente: 'pAcudiente',
+  pTelAcudiente: 'pTelAcudiente',
+  pTelActions: 'pTelActions',
+  pTelAcudienteActions: 'pTelAcudienteActions',
+  fields: 'drawerFields'
+};
+
+const FILTER_STATE = {
+  todayOnly: false,
+  exactDate: '',
+  month: ''
+};
+
+const HEADER_ALIASES = {
+  estado: [
+    'estado',
+    'status',
+    'estado estudiante'
+  ],
+  edad: [
+    'edad',
+    'anos',
+    'años'
+  ],
+  nombre: [
+    'nombre',
+    'nombre completo',
+    'nombres y apellidos',
+    'estudiante',
+    'nombre del estudiante',
+    'alumno',
+    'alumna'
+  ],
+  telefono: [
+    'telefono',
+    'teléfono',
+    'celular',
+    'whatsapp',
+    'telefono estudiante',
+    'celular estudiante',
+    'tel estudiante'
+  ],
+  acudiente: [
+    'acudiente',
+    'nombre acudiente',
+    'acudiente principal',
+    'responsable',
+    'padre',
+    'madre',
+    'padre o madre',
+    'padre/madre'
+  ],
+  telefonoAcudiente: [
+    'telefono acudiente',
+    'teléfono acudiente',
+    'celular acudiente',
+    'whatsapp acudiente',
+    'telefono del acudiente',
+    'celular del acudiente',
+    'telefono responsable',
+    'telefono padre',
+    'telefono madre',
+    'tel acudiente'
+  ],
+  fechaInscripcion: [
+    'fecha de inscripcion',
+    'fecha de inscripción',
+    'fecha inscripcion',
+    'fecha inscripción',
+    'fecha registro',
+    'fecha de registro',
+    'timestamp',
+    'marca temporal',
+    'creado el',
+    'fecha',
+    'inscrito el'
+  ]
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  initDrawer();
+  injectRuntimeStyles();
+  ensureEnhancedToolbar();
   setupAccentInsensitiveSearch();
+  setupDateRangeFilter();
+  initDrawer();
+  bindUI();
+  cargarDatosDesdeTSV();
+});
 
+/* =========================
+   Init UI
+========================= */
+function bindUI() {
   const searchInput = document.getElementById(UI.searchInput);
   const btnAsc = document.getElementById(UI.btnAsc);
   const btnDesc = document.getElementById(UI.btnDesc);
@@ -49,13 +151,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnDownloadCsv = document.getElementById(UI.btnDownloadCsv);
   const selEstado = document.getElementById(UI.filterEstado);
   const selEdad = document.getElementById(UI.filterEdad);
+  const btnToday = document.getElementById(UI.btnToday);
+  const btnClearDate = document.getElementById(UI.btnClearDate);
+  const inputDate = document.getElementById(UI.filterDate);
+  const inputMonth = document.getElementById(UI.filterMonth);
 
-  // Search (debounced)
   if (searchInput) {
     const debouncedSearch = debounce((value) => {
       if (!dataTable) return;
       dataTable.search(String(value || '')).draw();
       refreshSelectOptions();
+      syncVisibleCount();
     }, 120);
 
     searchInput.addEventListener('input', () => {
@@ -63,17 +169,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Clear search
   if (btnClearSearch) {
     btnClearSearch.addEventListener('click', () => {
       if (searchInput) searchInput.value = '';
-      if (dataTable) dataTable.search('').draw();
-      refreshSelectOptions();
+      if (dataTable) {
+        dataTable.search('').draw();
+        refreshSelectOptions();
+        syncVisibleCount();
+      }
       setStatus('Búsqueda limpia ✅');
     });
   }
 
-  // Clear Estado/Edad
   if (btnClearFilters) {
     btnClearFilters.addEventListener('click', () => {
       if (!dataTable) return;
@@ -81,37 +188,46 @@ document.addEventListener('DOMContentLoaded', () => {
       if (selEstado) selEstado.value = '';
       if (selEdad) selEdad.value = '';
 
-      dataTable.column(colLetterToDtIndex('B')).search('', true, false);
-      dataTable.column(colLetterToDtIndex('E')).search('', true, false);
+      const estadoCol = getEstadoColIndex();
+      const edadCol = getEdadColIndex();
+
+      if (estadoCol > -1) dataTable.column(estadoCol).search('', true, false);
+      if (edadCol > -1) dataTable.column(edadCol).search('', true, false);
 
       dataTable.draw();
       refreshSelectOptions();
+      syncVisibleCount();
       setStatus('Filtros limpios ✅');
     });
   }
 
-  // Orden del Sheet (↑/↓) por __sheet_order__
   if (btnAsc) btnAsc.addEventListener('click', () => dataTable && dataTable.order([[0, 'asc']]).draw());
   if (btnDesc) btnDesc.addEventListener('click', () => dataTable && dataTable.order([[0, 'desc']]).draw());
 
-  // Filtros Estado/Edad
   if (selEstado) {
     selEstado.addEventListener('change', () => {
       if (!dataTable) return;
-      applyExactColumnFilter(colLetterToDtIndex('B'), selEstado.value);
+      const estadoCol = getEstadoColIndex();
+      if (estadoCol > -1) {
+        applyExactColumnFilter(estadoCol, selEstado.value);
+      }
       refreshSelectOptions();
+      syncVisibleCount();
     });
   }
 
   if (selEdad) {
     selEdad.addEventListener('change', () => {
       if (!dataTable) return;
-      applyExactColumnFilter(colLetterToDtIndex('E'), selEdad.value);
+      const edadCol = getEdadColIndex();
+      if (edadCol > -1) {
+        applyExactColumnFilter(edadCol, selEdad.value);
+      }
       refreshSelectOptions();
+      syncVisibleCount();
     });
   }
 
-  // Descargar CSV (con pregunta de fecha)
   if (btnDownloadCsv) {
     btnDownloadCsv.addEventListener('click', () => {
       if (!dataTable) return;
@@ -119,28 +235,122 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Cargar datos
-  cargarDatosDesdeTSV();
-});
+  if (btnToday) {
+    btnToday.addEventListener('click', () => {
+      FILTER_STATE.todayOnly = !FILTER_STATE.todayOnly;
 
-/* =========================
-   Helpers: Column letters -> DataTables index
-   DataTables col 0 = __sheet_order__
-   Sheet A => DT 1, B => DT 2, ... Z => DT 26, AA => DT 27, AB => 28, AC => 29
-========================= */
-function colLetterToDtIndex(letter) {
-  return colLetterToNumber(letter);
+      if (FILTER_STATE.todayOnly) {
+        FILTER_STATE.exactDate = '';
+        FILTER_STATE.month = '';
+        if (inputDate) inputDate.value = '';
+        if (inputMonth) inputMonth.value = '';
+        btnToday.classList.add('is-active-filter');
+        setStatus('Mostrando inscripciones nuevas de hoy 📌');
+      } else {
+        btnToday.classList.remove('is-active-filter');
+        setStatus('Filtro de hoy desactivado');
+      }
+
+      if (dataTable) {
+        dataTable.draw();
+        refreshSelectOptions();
+        syncVisibleCount();
+      }
+    });
+  }
+
+  if (inputDate) {
+    inputDate.addEventListener('change', () => {
+      FILTER_STATE.todayOnly = false;
+      FILTER_STATE.exactDate = String(inputDate.value || '').trim();
+      FILTER_STATE.month = '';
+      if (btnToday) btnToday.classList.remove('is-active-filter');
+      if (inputMonth) inputMonth.value = '';
+
+      if (dataTable) {
+        dataTable.draw();
+        refreshSelectOptions();
+        syncVisibleCount();
+      }
+
+      setStatus(FILTER_STATE.exactDate
+        ? `Filtrando por fecha: ${FILTER_STATE.exactDate}`
+        : 'Filtro por fecha quitado');
+    });
+  }
+
+  if (inputMonth) {
+    inputMonth.addEventListener('change', () => {
+      FILTER_STATE.todayOnly = false;
+      FILTER_STATE.month = String(inputMonth.value || '').trim();
+      FILTER_STATE.exactDate = '';
+      if (btnToday) btnToday.classList.remove('is-active-filter');
+      if (inputDate) inputDate.value = '';
+
+      if (dataTable) {
+        dataTable.draw();
+        refreshSelectOptions();
+        syncVisibleCount();
+      }
+
+      setStatus(FILTER_STATE.month
+        ? `Filtrando por mes: ${FILTER_STATE.month}`
+        : 'Filtro por mes quitado');
+    });
+  }
+
+  if (btnClearDate) {
+    btnClearDate.addEventListener('click', () => {
+      clearDateFilters(true);
+    });
+  }
 }
 
-function colLetterToNumber(letter) {
-  const s = String(letter || '').toUpperCase().trim();
-  let num = 0;
-  for (let i = 0; i < s.length; i++) {
-    const code = s.charCodeAt(i);
-    if (code < 65 || code > 90) continue; // A-Z
-    num = num * 26 + (code - 64);
+/* =========================
+   Toolbar extra (inyectado)
+========================= */
+function ensureEnhancedToolbar() {
+  const toolbarLeft = document.querySelector('.toolbar-left');
+  if (!toolbarLeft) return;
+
+  if (!document.getElementById(UI.filterDate)) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'toolbar-date-tools';
+    wrapper.innerHTML = `
+      <button id="${UI.btnToday}" class="btn btn-ghost" type="button" title="Mostrar solo inscripciones nuevas del día">
+        Nuevas de hoy
+      </button>
+
+      <label class="toolbar-label" for="${UI.filterDate}">
+        Fecha:
+        <input type="date" id="${UI.filterDate}" class="input-date-filter" />
+      </label>
+
+      <label class="toolbar-label" for="${UI.filterMonth}">
+        Mes:
+        <input type="month" id="${UI.filterMonth}" class="input-date-filter" />
+      </label>
+
+      <button id="${UI.btnClearDate}" class="btn btn-ghost" type="button" title="Quitar filtros de fecha">
+        Limpiar fecha
+      </button>
+    `;
+    toolbarLeft.appendChild(wrapper);
   }
-  return num;
+
+  const toolbar = document.querySelector('.table-toolbar');
+  if (toolbar && !document.getElementById(UI.legend)) {
+    const legend = document.createElement('div');
+    legend.id = UI.legend;
+    legend.className = 'status-legend';
+    legend.innerHTML = `
+      <span class="legend-item"><span class="status-dot is-activo"></span> Activo</span>
+      <span class="legend-item"><span class="status-dot is-activo-no-registro"></span> Activo no registro</span>
+      <span class="legend-item"><span class="status-dot is-pausa"></span> Activo en pausa</span>
+      <span class="legend-item"><span class="status-dot is-inactivo"></span> Inactivo</span>
+    `;
+    toolbar.appendChild(legend);
+  }
 }
 
 /* =========================
@@ -163,6 +373,44 @@ function setupAccentInsensitiveSearch() {
 }
 
 /* =========================
+   DataTables ext.search (fecha)
+========================= */
+function setupDateRangeFilter() {
+  if (!window.jQuery || !jQuery.fn || !jQuery.fn.dataTable) return;
+
+  jQuery.fn.dataTable.ext.search.push((settings, searchData, index, rowData) => {
+    if (!settings || settings.nTable?.id !== 'tablaEstudiantes') return true;
+    if (!Array.isArray(rowData)) return true;
+
+    const dateCol = getFechaInscripcionColIndex();
+    if (dateCol < 0) return true;
+
+    const rawDate = rowData[dateCol];
+    const rowDate = parseFlexibleDate(rawDate);
+    if (!rowDate) return false;
+
+    if (FILTER_STATE.todayOnly) {
+      return isSameDay(rowDate, new Date());
+    }
+
+    if (FILTER_STATE.exactDate) {
+      const target = parseFlexibleDate(FILTER_STATE.exactDate);
+      return target ? isSameDay(rowDate, target) : true;
+    }
+
+    if (FILTER_STATE.month) {
+      const [year, month] = FILTER_STATE.month.split('-').map(Number);
+      return (
+        rowDate.getFullYear() === year &&
+        (rowDate.getMonth() + 1) === month
+      );
+    }
+
+    return true;
+  });
+}
+
+/* =========================
    Carga + parse TSV
 ========================= */
 async function cargarDatosDesdeTSV() {
@@ -176,12 +424,16 @@ async function cargarDatosDesdeTSV() {
     const text = await res.text();
     const parsed = parseTSV(text);
 
-    if (!parsed.headers.length) throw new Error('Encabezados vacíos o TSV inválido');
+    if (!parsed.headers.length) {
+      throw new Error('Encabezados vacíos o TSV inválido');
+    }
 
+    ALL_ROWS = parsed.data.slice();
     construirTabla(parsed.headers, parsed.data);
     actualizarTotal(parsed.data.length);
+    syncVisibleCount();
 
-    setStatus('Datos cargados correctamente.');
+    setStatus('Datos cargados correctamente ✅');
   } catch (err) {
     console.error('Error cargando datos:', err);
     setStatus('Error cargando datos. Revisa la URL TSV o los permisos del archivo.');
@@ -211,24 +463,20 @@ function parseTSV(text) {
 
   const data = rows
     .slice(1)
-    .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''))
+    .filter((row) => row.some((cell) => isMeaningfulValue(cell)))
     .map((row, idx) => [idx, ...row]);
 
   return { headers, data };
 }
 
 /* =========================
-   DataTable
+   Construcción de DataTable
 ========================= */
 function construirTabla(headers, data) {
   HEADERS = headers.slice();
   HEADER_INDEX = buildHeaderIndex(headers);
+  EMPTY_COLUMN_INDEXES = detectCompletelyEmptyColumns(headers, data);
 
-  // Detectar si columna A está vacía en TODOS los registros
-  const colA = colLetterToDtIndex('A'); // 1
-  const isAEmptyEverywhere = data.every(row => String(row[colA] ?? '').trim() === '');
-
-  // Render thead
   const thead = document.querySelector('#tablaEstudiantes thead');
   if (thead) {
     thead.innerHTML = '';
@@ -241,46 +489,76 @@ function construirTabla(headers, data) {
     thead.appendChild(headRow);
   }
 
-  // Destruir anterior
   if (dataTable) {
     try { dataTable.destroy(true); } catch (e) { console.warn(e); }
     dataTable = null;
   }
 
+  const columnDefs = [
+    { targets: 0, visible: false, searchable: false }
+  ];
+
+  for (const idx of EMPTY_COLUMN_INDEXES) {
+    if (idx !== 0) {
+      columnDefs.push({ targets: idx, visible: false });
+    }
+  }
+
+  const estadoCol = getEstadoColIndex();
+  if (estadoCol > -1) {
+    columnDefs.push({
+      targets: estadoCol,
+      render: function (data, type) {
+        const raw = String(data ?? '').trim();
+        if (type !== 'display') return raw;
+        return renderEstadoBadge(raw);
+      }
+    });
+  }
+
   dataTable = $('#tablaEstudiantes').DataTable({
     data,
     columns: headers.map((h) => ({ title: h || '' })),
-
-    columnDefs: [
-      { targets: 0, visible: false, searchable: false },     // __sheet_order__
-      { targets: colA, visible: !isAEmptyEverywhere },       // A oculto si vacío total
-    ],
-
+    columnDefs,
     pageLength: 25,
     deferRender: true,
     processing: true,
     order: [[0, 'asc']],
     autoWidth: false,
     stateSave: false,
-
     language: {
       url: 'https://cdn.datatables.net/plug-ins/1.13.8/i18n/es-ES.json'
     },
-
     initComplete: function () {
       wireRowClick();
-
       refreshSelectOptions();
-      dataTable.on('draw.dt', () => refreshSelectOptions());
+      syncVisibleCount();
+
+      dataTable.on('draw.dt', () => {
+        refreshSelectOptions();
+        syncVisibleCount();
+      });
     }
   });
 }
 
+function detectCompletelyEmptyColumns(headers, data) {
+  const emptySet = new Set();
+  if (!headers.length || !data.length) return emptySet;
+
+  for (let col = 1; col < headers.length; col++) {
+    const allEmpty = data.every(row => !isMeaningfulValue(row[col]));
+    if (allEmpty) emptySet.add(col);
+  }
+
+  return emptySet;
+}
+
 /* =========================
-   Filtros Estado/Edad (exactos)
+   Filtros Estado/Edad
 ========================= */
 function applyExactColumnFilter(colIdx, rawValue) {
-  if (!dataTable) return;
+  if (!dataTable || colIdx < 0) return;
   const value = String(rawValue ?? '');
 
   if (!value) {
@@ -298,27 +576,35 @@ function refreshSelectOptions() {
   const selEstado = document.getElementById(UI.filterEstado);
   const selEdad = document.getElementById(UI.filterEdad);
 
-  const colB = colLetterToDtIndex('B'); // Estado
-  const colE = colLetterToDtIndex('E'); // Edad
+  const estadoCol = getEstadoColIndex();
+  const edadCol = getEdadColIndex();
 
   const currentEstado = selEstado ? selEstado.value : '';
   const currentEdad = selEdad ? selEdad.value : '';
 
-  // valores únicos SOLO de lo visible (applied)
   const rows = dataTable.rows({ search: 'applied' }).data().toArray();
 
   const estadoSet = new Set();
   const edadSet = new Set();
 
   for (const r of rows) {
-    const est = String(r[colB] ?? '').trim();
-    const ed = String(r[colE] ?? '').trim();
-    if (est) estadoSet.add(est);
-    if (ed) edadSet.add(ed);
+    if (estadoCol > -1) {
+      const est = String(r[estadoCol] ?? '').trim();
+      if (est) estadoSet.add(est);
+    }
+    if (edadCol > -1) {
+      const ed = String(r[edadCol] ?? '').trim();
+      if (ed) edadSet.add(ed);
+    }
   }
 
-  const estados = Array.from(estadoSet).sort((a, b) => normalizeText(a).localeCompare(normalizeText(b), 'es'));
-  const edades = Array.from(edadSet).sort((a, b) => normalizeText(a).localeCompare(normalizeText(b), 'es'));
+  const estados = Array.from(estadoSet).sort((a, b) =>
+    normalizeText(a).localeCompare(normalizeText(b), 'es')
+  );
+
+  const edades = Array.from(edadSet).sort((a, b) =>
+    normalizeText(a).localeCompare(normalizeText(b), 'es')
+  );
 
   if (selEstado) {
     selEstado.innerHTML = '';
@@ -335,124 +621,31 @@ function refreshSelectOptions() {
   }
 }
 
-/* =========================
-   Descargar CSV
-   - pregunta desde qué fecha (YYYY-MM-DD)
-   - toma filas filtradas actuales
-   - filtra por AC >= fecha
-   - ordena por AC desc
-   - exporta SOLO A y C..Z
-========================= */
-function downloadCsvFiltered() {
-  const colA = colLetterToDtIndex('A');      // 1
-  const colC = colLetterToDtIndex('C');      // 3
-  const colZ = colLetterToDtIndex('Z');      // 26
-  const colAC = colLetterToDtIndex('AC');    // 29
+function clearDateFilters(redraw = false) {
+  FILTER_STATE.todayOnly = false;
+  FILTER_STATE.exactDate = '';
+  FILTER_STATE.month = '';
 
-  // 1) Preguntar fecha mínima
-  const input = prompt(
-    "¿Desde qué fecha quieres descargar?\n\n" +
-    "Formato recomendado: YYYY-MM-DD\n" +
-    "Ejemplo: 2026-01-15\n\n" +
-    "Deja vacío para descargar todo."
-  );
+  const btnToday = document.getElementById(UI.btnToday);
+  const inputDate = document.getElementById(UI.filterDate);
+  const inputMonth = document.getElementById(UI.filterMonth);
 
-  let minDateMs = 0;
-  let minDateLabel = 'todo';
+  if (btnToday) btnToday.classList.remove('is-active-filter');
+  if (inputDate) inputDate.value = '';
+  if (inputMonth) inputMonth.value = '';
 
-  if (input && input.trim() !== "") {
-    const parsed = Date.parse(input.trim());
-    if (Number.isNaN(parsed)) {
-      alert("Fecha inválida 😅 Usa formato YYYY-MM-DD.");
-      return;
-    }
-    minDateMs = parsed;
-    minDateLabel = input.trim();
+  if (redraw && dataTable) {
+    dataTable.draw();
+    refreshSelectOptions();
+    syncVisibleCount();
   }
 
-  // 2) Tomar filas filtradas actuales
-  let rows = dataTable.rows({ search: 'applied' }).data().toArray();
-
-  // 3) Filtrar por fecha AC >= minDate
-  if (minDateMs > 0) {
-    rows = rows.filter(r => parseDateToMs(r[colAC]) >= minDateMs);
-  }
-
-  if (!rows.length) {
-    alert("No hay registros desde esa fecha 📭");
-    return;
-  }
-
-  // 4) Ordenar por fecha AC desc
-  rows.sort((r1, r2) => parseDateToMs(r2[colAC]) - parseDateToMs(r1[colAC]));
-
-  // 5) Exportar SOLO A y C..Z
-  const exportColIndices = [colA];
-  for (let i = colC; i <= colZ; i++) exportColIndices.push(i);
-
-  const exportHeaders = exportColIndices.map(i => HEADERS[i] ?? `Col${i}`);
-
-  const csvLines = [];
-  csvLines.push(exportHeaders.map(csvEscape).join(','));
-
-  for (const row of rows) {
-    const out = exportColIndices.map(i => csvEscape(String(row[i] ?? '').trim()));
-    csvLines.push(out.join(','));
-  }
-
-  // 6) Descargar archivo
-  const csv = csvLines.join('\n');
-  const filename = `Musicala_Inscritos_${formatDateForFile(new Date())}_desde_${sanitizeFilePart(minDateLabel)}.csv`;
-  downloadTextFile(csv, filename, 'text/csv;charset=utf-8;');
-
-  setStatus(`CSV descargado (${rows.length} filas) ✅`);
+  setStatus('Filtros de fecha limpios ✅');
 }
 
 /* =========================
-   Parse fecha (AC) robusto
+   Drawer / ficha
 ========================= */
-function parseDateToMs(value) {
-  const s = String(value ?? '').trim();
-  if (!s) return 0;
-
-  // Intento 1: Date.parse (ISO / formatos reconocibles)
-  const p = Date.parse(s);
-  if (!Number.isNaN(p)) return p;
-
-  // Intento 2: dd/mm/yyyy hh:mm:ss o dd/mm/yyyy
-  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-  if (m) {
-    const dd = Number(m[1]);
-    const mm = Number(m[2]) - 1;
-    let yy = Number(m[3]);
-    if (yy < 100) yy += 2000;
-    const hh = Number(m[4] ?? 0);
-    const mi = Number(m[5] ?? 0);
-    const ss = Number(m[6] ?? 0);
-    const dt = new Date(yy, mm, dd, hh, mi, ss);
-    return dt.getTime();
-  }
-
-  return 0;
-}
-
-/* =========================
-   Drawer (ficha)
-   Nota: no afecta filtros/CSV, pero lo dejamos vivo.
-========================= */
-const DRAWER_IDS = {
-  drawer: 'studentDrawer',
-  title: 'drawerTitle',
-  subtitle: 'drawerSubtitle',
-  pNombre: 'pNombre',
-  pTel: 'pTel',
-  pAcudiente: 'pAcudiente',
-  pTelAcudiente: 'pTelAcudiente',
-  pTelActions: 'pTelActions',
-  pTelAcudienteActions: 'pTelAcudienteActions',
-  fields: 'drawerFields'
-};
-
 function initDrawer() {
   const drawer = document.getElementById(DRAWER_IDS.drawer);
   if (!drawer) return;
@@ -491,28 +684,50 @@ function openDrawerFromRow(rowData) {
   const telAcActions = document.getElementById(DRAWER_IDS.pTelAcudienteActions);
   const fieldsEl = document.getElementById(DRAWER_IDS.fields);
 
-  // Ojo: estos fallbacks dependen de tu sheet real.
-  const nombre = String(rowData[colLetterToDtIndex('C')] ?? rowData[1] ?? '—').trim(); // ejemplo
-  const tel = String(rowData[colLetterToDtIndex('D')] ?? '').trim();                  // ejemplo
-  const acudiente = String(rowData[colLetterToDtIndex('F')] ?? '').trim();            // ejemplo
-  const telAcudiente = String(rowData[colLetterToDtIndex('G')] ?? '').trim();         // ejemplo
+  const nombre = getBestFieldValue(rowData, HEADER_ALIASES.nombre, [colLetterToDtIndex('A')]);
+  const telefono = getBestFieldValue(rowData, HEADER_ALIASES.telefono, [colLetterToDtIndex('K')]);
+  const acudiente = getBestFieldValue(rowData, HEADER_ALIASES.acudiente, [colLetterToDtIndex('U')]);
+  const telefonoAcudiente = getBestFieldValue(rowData, HEADER_ALIASES.telefonoAcudiente, [colLetterToDtIndex('W')]);
+  const estado = getBestFieldValue(rowData, HEADER_ALIASES.estado, [colLetterToDtIndex('B')]);
+  const fechaInscripcion = getBestFieldValue(rowData, HEADER_ALIASES.fechaInscripcion, [colLetterToDtIndex('AC')]);
 
-  if (titleEl) titleEl.textContent = nombre || 'Ficha';
-  if (subtitleEl) subtitleEl.textContent = 'Ficha del estudiante';
-  if (pNombreEl) pNombreEl.textContent = nombre || '—';
-  if (pTelEl) pTelEl.textContent = tel || '—';
-  if (pAcEl) pAcEl.textContent = acudiente || '—';
-  if (pTelAcEl) pTelAcEl.textContent = telAcudiente || '—';
+  const displayName = isMeaningfulValue(nombre)
+    ? String(nombre).trim()
+    : 'Ficha del estudiante';
 
-  renderPhoneActions(telActions, tel, 'Teléfono copiado');
-  renderPhoneActions(telAcActions, telAcudiente, 'Tel. acudiente copiado');
+  if (titleEl) titleEl.textContent = displayName;
+
+  if (subtitleEl) {
+    const subtitleParts = [];
+    if (isMeaningfulValue(estado)) subtitleParts.push(`Estado: ${String(estado).trim()}`);
+    if (isMeaningfulValue(fechaInscripcion)) subtitleParts.push(`Inscripción: ${String(fechaInscripcion).trim()}`);
+    subtitleEl.textContent = subtitleParts.length ? subtitleParts.join(' · ') : 'Ficha del estudiante';
+  }
+
+  setPrimaryValue(DRAWER_IDS.pNombre, displayName, true);
+  setPrimaryValue(DRAWER_IDS.pTel, telefono, false);
+  setPrimaryValue(DRAWER_IDS.pAcudiente, acudiente, false);
+  setPrimaryValue(DRAWER_IDS.pTelAcudiente, telefonoAcudiente, false);
+
+  renderPhoneActions(telActions, telefono, 'Teléfono copiado');
+  renderPhoneActions(telAcActions, telefonoAcudiente, 'Tel. acudiente copiado');
+
+  togglePrimaryItemVisibility(pNombreEl, true);
+  togglePrimaryItemVisibility(pTelEl, isMeaningfulValue(telefono));
+  togglePrimaryItemVisibility(pAcEl, isMeaningfulValue(acudiente));
+  togglePrimaryItemVisibility(pTelAcEl, isMeaningfulValue(telefonoAcudiente));
 
   if (fieldsEl) {
     fieldsEl.innerHTML = '';
+
     for (let i = 1; i < HEADERS.length; i++) {
       const label = String(HEADERS[i] || '').trim();
+      const value = String(rowData[i] ?? '').trim();
+
       if (!label) continue;
-      const value = String(rowData[i] ?? '').trim() || '—';
+      if (EMPTY_COLUMN_INDEXES.has(i)) continue;
+      if (!isMeaningfulValue(value)) continue;
+
       const row = document.createElement('div');
       row.className = 'kv__row';
       row.innerHTML = `
@@ -521,11 +736,37 @@ function openDrawerFromRow(rowData) {
       `;
       fieldsEl.appendChild(row);
     }
+
+    if (!fieldsEl.children.length) {
+      fieldsEl.innerHTML = `
+        <div class="kv__row">
+          <dt class="kv__k">Información</dt>
+          <dd class="kv__v">No hay más campos con información para mostrar.</dd>
+        </div>
+      `;
+    }
   }
 
   drawer.classList.add('is-open');
   drawer.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+}
+
+function setPrimaryValue(id, value, alwaysVisible = false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (alwaysVisible) {
+    el.textContent = String(value || '—').trim() || '—';
+    return;
+  }
+  el.textContent = isMeaningfulValue(value) ? String(value).trim() : '—';
+}
+
+function togglePrimaryItemVisibility(valueElement, shouldShow) {
+  if (!valueElement) return;
+  const item = valueElement.closest('.primary__item');
+  if (!item) return;
+  item.style.display = shouldShow ? '' : 'none';
 }
 
 function closeDrawer() {
@@ -534,6 +775,149 @@ function closeDrawer() {
   drawer.classList.remove('is-open');
   drawer.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
+}
+
+/* =========================
+   Descargar CSV
+========================= */
+function downloadCsvFiltered() {
+  const colA = colLetterToDtIndex('A');
+  const colC = colLetterToDtIndex('C');
+  const colZ = colLetterToDtIndex('Z');
+  const colAC = colLetterToDtIndex('AC');
+
+  const input = prompt(
+    "¿Desde qué fecha quieres descargar?\n\n" +
+    "Formato recomendado: YYYY-MM-DD\n" +
+    "Ejemplo: 2026-01-15\n\n" +
+    "Deja vacío para descargar todo."
+  );
+
+  let minDateMs = 0;
+  let minDateLabel = 'todo';
+
+  if (input && input.trim() !== '') {
+    const parsed = Date.parse(input.trim());
+    if (Number.isNaN(parsed)) {
+      alert('Fecha inválida 😅 Usa formato YYYY-MM-DD.');
+      return;
+    }
+    minDateMs = parsed;
+    minDateLabel = input.trim();
+  }
+
+  let rows = dataTable.rows({ search: 'applied' }).data().toArray();
+
+  if (minDateMs > 0) {
+    rows = rows.filter(r => parseDateToMs(r[colAC]) >= minDateMs);
+  }
+
+  if (!rows.length) {
+    alert('No hay registros desde esa fecha 📭');
+    return;
+  }
+
+  rows.sort((r1, r2) => parseDateToMs(r2[colAC]) - parseDateToMs(r1[colAC]));
+
+  const exportColIndices = [colA];
+  for (let i = colC; i <= colZ; i++) exportColIndices.push(i);
+
+  const exportHeaders = exportColIndices.map(i => HEADERS[i] ?? `Col${i}`);
+
+  const csvLines = [];
+  csvLines.push(exportHeaders.map(csvEscape).join(','));
+
+  for (const row of rows) {
+    const out = exportColIndices.map(i => csvEscape(String(row[i] ?? '').trim()));
+    csvLines.push(out.join(','));
+  }
+
+  const csv = csvLines.join('\n');
+  const filename = `Musicala_Inscritos_${formatDateForFile(new Date())}_desde_${sanitizeFilePart(minDateLabel)}.csv`;
+  downloadTextFile(csv, filename, 'text/csv;charset=utf-8;');
+
+  setStatus(`CSV descargado (${rows.length} filas) ✅`);
+}
+
+/* =========================
+   Estado visual
+========================= */
+function renderEstadoBadge(rawValue) {
+  const value = String(rawValue ?? '').trim();
+  if (!value) return '';
+
+  const cls = getStatusClass(value);
+  return `
+    <span class="estado-badge ${cls}" title="${escapeHtml(value)}">
+      <span class="status-dot ${cls}"></span>
+      <span>${escapeHtml(value)}</span>
+    </span>
+  `;
+}
+
+function getStatusClass(value) {
+  const s = normalizeText(value);
+
+  if (s.includes('pausa')) return 'is-pausa';
+  if (s.includes('inactivo')) return 'is-inactivo';
+  if (s.includes('no registro')) return 'is-activo-no-registro';
+  if (s.includes('activo')) return 'is-activo';
+
+  return 'is-neutro';
+}
+
+/* =========================
+   Detección de columnas
+========================= */
+function getEstadoColIndex() {
+  return findHeaderIndex(HEADER_ALIASES.estado, colLetterToDtIndex('B'));
+}
+
+function getEdadColIndex() {
+  return findHeaderIndex(HEADER_ALIASES.edad, colLetterToDtIndex('E'));
+}
+
+function getFechaInscripcionColIndex() {
+  return findHeaderIndex(HEADER_ALIASES.fechaInscripcion, colLetterToDtIndex('AC'));
+}
+
+function findHeaderIndex(aliasList = [], fallbackIndex = -1) {
+  for (const alias of aliasList) {
+    const key = normKey(alias);
+    if (Object.prototype.hasOwnProperty.call(HEADER_INDEX, key)) {
+      return HEADER_INDEX[key];
+    }
+  }
+
+  if (
+    Number.isInteger(fallbackIndex) &&
+    fallbackIndex >= 0 &&
+    fallbackIndex < HEADERS.length
+  ) {
+    return fallbackIndex;
+  }
+
+  return -1;
+}
+
+function getBestFieldValue(rowData, aliases = [], fallbackIndexes = []) {
+  const idx = findHeaderIndex(aliases, -1);
+  if (idx > -1 && isMeaningfulValue(rowData[idx])) {
+    return String(rowData[idx]).trim();
+  }
+
+  for (const fallback of fallbackIndexes) {
+    if (
+      Number.isInteger(fallback) &&
+      fallback >= 0 &&
+      fallback < rowData.length &&
+      isMeaningfulValue(rowData[fallback])
+    ) {
+      return String(rowData[fallback]).trim();
+    }
+  }
+
+  return '';
 }
 
 /* =========================
@@ -599,7 +983,7 @@ async function copyToClipboard(text) {
 }
 
 /* =========================
-   Header index (por si luego lo usas)
+   Header index
 ========================= */
 function normKey(s) {
   return String(s ?? '')
@@ -611,8 +995,57 @@ function normKey(s) {
 
 function buildHeaderIndex(headers) {
   const idx = {};
-  headers.forEach((h, i) => { idx[normKey(h)] = i; });
+  headers.forEach((h, i) => {
+    idx[normKey(h)] = i;
+  });
   return idx;
+}
+
+/* =========================
+   Fecha helpers
+========================= */
+function parseDateToMs(value) {
+  const dt = parseFlexibleDate(value);
+  return dt ? dt.getTime() : 0;
+}
+
+function parseFlexibleDate(value) {
+  const s = String(value ?? '').trim();
+  if (!s) return null;
+
+  // YYYY-MM-DD
+  const isoLike = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoLike) {
+    const dt = new Date(Number(isoLike[1]), Number(isoLike[2]) - 1, Number(isoLike[3]));
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+
+  // dd/mm/yyyy o d/m/yyyy con o sin hora
+  const latam = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (latam) {
+    const dd = Number(latam[1]);
+    const mm = Number(latam[2]) - 1;
+    let yy = Number(latam[3]);
+    if (yy < 100) yy += 2000;
+    const hh = Number(latam[4] ?? 0);
+    const mi = Number(latam[5] ?? 0);
+    const ss = Number(latam[6] ?? 0);
+    const dt = new Date(yy, mm, dd, hh, mi, ss);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+  }
+
+  const parsed = new Date(s);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isSameDay(a, b) {
+  return (
+    a instanceof Date &&
+    b instanceof Date &&
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
 /* =========================
@@ -624,10 +1057,40 @@ function actualizarTotal(total) {
   totalEl.textContent = String(total ?? 0);
 }
 
+function syncVisibleCount() {
+  const totalEl = document.getElementById(UI.total);
+  if (!totalEl || !dataTable) return;
+
+  const visible = dataTable.rows({ search: 'applied' }).count();
+  const total = ALL_ROWS.length;
+
+  totalEl.textContent = visible === total
+    ? String(total)
+    : `${visible} de ${total}`;
+}
+
 function setStatus(msg) {
   const statusEl = document.getElementById(UI.status);
   if (!statusEl) return;
   statusEl.textContent = msg;
+}
+
+/* =========================
+   Helpers de columnas/letras
+========================= */
+function colLetterToDtIndex(letter) {
+  return colLetterToNumber(letter);
+}
+
+function colLetterToNumber(letter) {
+  const s = String(letter || '').toUpperCase().trim();
+  let num = 0;
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    if (code < 65 || code > 90) continue;
+    num = num * 26 + (code - 64);
+  }
+  return num;
 }
 
 /* =========================
@@ -667,7 +1130,7 @@ function sanitizeFilePart(s) {
 }
 
 /* =========================
-   Utils
+   Utils generales
 ========================= */
 function debounce(fn, wait = 150) {
   let t = null;
@@ -699,4 +1162,118 @@ function escapeHtml(s) {
 
 function escapeRegex(s) {
   return String(s ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function isMeaningfulValue(value) {
+  if (value === null || value === undefined) return false;
+  const s = String(value).trim();
+  if (!s) return false;
+  const n = normalizeText(s);
+  return n !== '-' && n !== '—' && n !== 'null' && n !== 'undefined' && n !== 'n/a';
+}
+
+/* =========================
+   Estilos runtime
+========================= */
+function injectRuntimeStyles() {
+  if (document.getElementById('runtime-enhancements-styles')) return;
+
+  const style = document.createElement('style');
+  style.id = 'runtime-enhancements-styles';
+  style.textContent = `
+    .toolbar-date-tools{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    .input-date-filter{
+      border-radius: 999px;
+      border: 1px solid rgba(12, 10, 30, 0.18);
+      padding: 8px 12px;
+      font-size: 0.86rem;
+      background: #fff;
+      outline: none;
+      min-width: 150px;
+    }
+
+    .input-date-filter:focus{
+      border-color: rgba(12, 65, 196, 0.55);
+      box-shadow: 0 0 0 3px rgba(12, 65, 196, 0.22);
+    }
+
+    .status-legend{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      align-items:center;
+      font-size: 0.78rem;
+      color:#4b5563;
+      width:100%;
+      padding-top:4px;
+    }
+
+    .legend-item{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      background: rgba(12,10,30,0.03);
+      border:1px solid rgba(12,10,30,0.06);
+      border-radius:999px;
+      padding:5px 9px;
+    }
+
+    .estado-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      font-weight:600;
+      white-space:nowrap;
+    }
+
+    .status-dot{
+      width:10px;
+      height:10px;
+      border-radius:50%;
+      display:inline-block;
+      flex:0 0 10px;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+    }
+
+    .status-dot.is-activo,
+    .estado-badge.is-activo .status-dot{
+      background:#16a34a;
+    }
+
+    .status-dot.is-activo-no-registro,
+    .estado-badge.is-activo-no-registro .status-dot{
+      background:#2563eb;
+    }
+
+    .status-dot.is-pausa,
+    .estado-badge.is-pausa .status-dot{
+      background:#f59e0b;
+    }
+
+    .status-dot.is-inactivo,
+    .estado-badge.is-inactivo .status-dot{
+      background:#dc2626;
+    }
+
+    .status-dot.is-neutro,
+    .estado-badge.is-neutro .status-dot{
+      background:#6b7280;
+    }
+
+    .is-active-filter{
+      background: rgba(12, 65, 196, 0.14) !important;
+      border-color: rgba(12, 65, 196, 0.42) !important;
+    }
+
+    #drawerFields .kv__row{
+      align-items:start;
+    }
+  `;
+  document.head.appendChild(style);
 }
