@@ -35,6 +35,7 @@ const UI = {
   filterEdad: 'filterEdad',
   status: 'statusMessage',
   total: 'totalRegistros',
+  birthdayBanner: 'birthdayWeekNotice',
 
   // Inyectados si no existen
   btnToday: 'btnTodayInscriptions',
@@ -126,11 +127,28 @@ const HEADER_ALIASES = {
     'creado el',
     'fecha',
     'inscrito el'
+  ],
+  cumpleanos: [
+    'cumpleanos',
+    'cumpleaños',
+    'fecha de cumpleanos',
+    'fecha de cumpleaños',
+    'fecha cumpleanos',
+    'fecha cumpleaños',
+    'fecha de nacimiento',
+    'fecha nacimiento',
+    'fecha nac',
+    'fecha nac.',
+    'nacimiento',
+    'birthday',
+    'birthdate',
+    'date of birth'
   ]
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   injectRuntimeStyles();
+  ensureBirthdayNoticeContainer();
   ensureEnhancedToolbar();
   setupAccentInsensitiveSearch();
   setupDateRangeFilter();
@@ -307,6 +325,240 @@ function bindUI() {
 }
 
 /* =========================
+   Aviso de cumpleaños
+========================= */
+function ensureBirthdayNoticeContainer() {
+  if (document.getElementById(UI.birthdayBanner)) return;
+
+  const card = document.querySelector('.card');
+  const toolbar = document.querySelector('.table-toolbar');
+  if (!card) return;
+
+  const notice = document.createElement('section');
+  notice.id = UI.birthdayBanner;
+  notice.className = 'birthday-notice is-hidden';
+  notice.setAttribute('aria-live', 'polite');
+  notice.setAttribute('aria-label', 'Cumpleaños cercanos');
+
+  if (toolbar) {
+    card.insertBefore(notice, toolbar);
+  } else {
+    card.appendChild(notice);
+  }
+}
+
+function renderBirthdayWeekNotice(rows = []) {
+  const notice = document.getElementById(UI.birthdayBanner);
+  if (!notice) return;
+
+  const birthdayCol = getBirthdayColIndex();
+  const nombreCol = findHeaderIndex(HEADER_ALIASES.nombre, colLetterToDtIndex('A'));
+
+  if (birthdayCol < 0 || nombreCol < 0 || !Array.isArray(rows) || !rows.length) {
+    hideBirthdayNotice();
+    return;
+  }
+
+  const birthdayWindow = getBirthdayNearWindow(new Date());
+  const birthdays = [];
+
+  for (const row of rows) {
+    const rawBirthday = row[birthdayCol];
+    const parsedBirthday = parseBirthdayForYear(rawBirthday);
+    if (!parsedBirthday) continue;
+
+    const candidateDates = getBirthdayCandidatesForWindow(
+      parsedBirthday,
+      birthdayWindow.start,
+      birthdayWindow.end
+    );
+    if (!candidateDates.length) continue;
+
+    const displayName = String(row[nombreCol] ?? '').trim() || 'Estudiante sin nombre';
+    const birthdayDate = candidateDates[0];
+
+    birthdays.push({
+      name: displayName,
+      date: birthdayDate,
+      relativeLabel: getRelativeBirthdayLabel(birthdayDate, birthdayWindow.today),
+      rawBirthday: String(rawBirthday ?? '').trim()
+    });
+  }
+
+  if (!birthdays.length) {
+    hideBirthdayNotice();
+    return;
+  }
+
+  birthdays.sort((a, b) => {
+    const byDate = a.date.getTime() - b.date.getTime();
+    if (byDate !== 0) return byDate;
+    return normalizeText(a.name).localeCompare(normalizeText(b.name), 'es');
+  });
+
+  const listHtml = birthdays
+    .map((b) => `
+      <li class="birthday-notice__item">
+        <strong>${escapeHtml(b.name)}</strong>
+        <span>${escapeHtml(b.relativeLabel)} · ${escapeHtml(formatBirthdayDay(b.date))}</span>
+      </li>
+    `)
+    .join('');
+
+  const countText = birthdays.length === 1
+    ? 'Cumpleaños cercano'
+    : 'Cumpleaños entre ayer, hoy y mañana';
+
+  notice.innerHTML = `
+    <div class="birthday-notice__icon" aria-hidden="true">🎂</div>
+    <div class="birthday-notice__body">
+      <p class="birthday-notice__title">${countText}:</p>
+      <ul class="birthday-notice__list">${listHtml}</ul>
+    </div>
+  `;
+  notice.classList.remove('is-hidden');
+}
+
+function hideBirthdayNotice() {
+  const notice = document.getElementById(UI.birthdayBanner);
+  if (!notice) return;
+  notice.innerHTML = '';
+  notice.classList.add('is-hidden');
+}
+
+function getBirthdayColIndex() {
+  const exact = findHeaderIndex(HEADER_ALIASES.cumpleanos, -1);
+  if (exact > -1) return exact;
+
+  for (let i = 1; i < HEADERS.length; i++) {
+    const key = normKey(HEADERS[i]);
+    if (!key) continue;
+    if (key.includes('inscripcion') || key.includes('registro')) continue;
+    if (key.includes('cumple') || key.includes('nacimiento') || key.includes('birth')) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
+function getBirthdayNearWindow(date) {
+  const today = stripTime(date);
+  const start = addDays(today, -1);
+  const end = addDays(today, 1);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, today, end };
+}
+
+function getBirthdayCandidatesForWindow(parsedBirthday, windowStart, windowEnd) {
+  const candidates = [];
+  const years = [windowStart.getFullYear(), windowEnd.getFullYear()];
+
+  for (const year of Array.from(new Set(years))) {
+    const candidate = makeBirthdayDate(year, parsedBirthday.month, parsedBirthday.day);
+    if (candidate && candidate >= windowStart && candidate <= windowEnd) {
+      candidates.push(candidate);
+    }
+  }
+
+  return candidates.sort((a, b) => a.getTime() - b.getTime());
+}
+
+function getRelativeBirthdayLabel(date, today) {
+  const diffDays = Math.round((stripTime(date).getTime() - stripTime(today).getTime()) / 86400000);
+  if (diffDays === -1) return 'Ayer';
+  if (diffDays === 0) return 'Hoy';
+  if (diffDays === 1) return 'Mañana';
+  return formatBirthdayDay(date);
+}
+
+function parseBirthdayForYear(value) {
+  const s = String(value ?? '').trim();
+  if (!s || !isMeaningfulValue(s)) return null;
+
+  // Serial de Excel/Google Sheets, por si el TSV llega como número puro.
+  if (/^\d{4,6}(?:\.\d+)?$/.test(s)) {
+    const serial = Number(s);
+    const dt = excelSerialToDate(serial);
+    if (dt) return { month: dt.getMonth(), day: dt.getDate() };
+  }
+
+  // YYYY-MM-DD o YYYY/MM/DD
+  let match = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (match) {
+    const month = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    return isValidMonthDay(month, day) ? { month, day } : null;
+  }
+
+  // dd/mm/yyyy, d-m-yyyy, dd/mm o d-m
+  match = s.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/);
+  if (match) {
+    const day = Number(match[1]);
+    const month = Number(match[2]) - 1;
+    return isValidMonthDay(month, day) ? { month, day } : null;
+  }
+
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime())) {
+    return { month: parsed.getMonth(), day: parsed.getDate() };
+  }
+
+  return null;
+}
+
+function makeBirthdayDate(year, month, day) {
+  if (month === 1 && day === 29 && !isLeapYear(year)) {
+    return new Date(year, 1, 28);
+  }
+
+  const dt = new Date(year, month, day);
+  if (dt.getFullYear() !== year || dt.getMonth() !== month || dt.getDate() !== day) {
+    return null;
+  }
+  return stripTime(dt);
+}
+
+function excelSerialToDate(serial) {
+  if (!Number.isFinite(serial) || serial <= 0) return null;
+  const ms = Math.round((serial - 25569) * 86400 * 1000);
+  const dt = new Date(ms);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function isValidMonthDay(month, day) {
+  if (!Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 0 || month > 11 || day < 1 || day > 31) return false;
+  const dt = new Date(2024, month, day); // año bisiesto para permitir 29 de febrero
+  return dt.getMonth() === month && dt.getDate() === day;
+}
+
+function isLeapYear(year) {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+function stripTime(date) {
+  const dt = new Date(date);
+  dt.setHours(0, 0, 0, 0);
+  return dt;
+}
+
+function addDays(date, days) {
+  const dt = new Date(date);
+  dt.setDate(dt.getDate() + days);
+  return dt;
+}
+
+function formatBirthdayDay(date) {
+  return new Intl.DateTimeFormat('es-CO', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long'
+  }).format(date);
+}
+
+/* =========================
    Toolbar extra (inyectado)
 ========================= */
 function ensureEnhancedToolbar() {
@@ -430,6 +682,7 @@ async function cargarDatosDesdeTSV() {
 
     ALL_ROWS = parsed.data.slice();
     construirTabla(parsed.headers, parsed.data);
+    renderBirthdayWeekNotice(parsed.data);
     actualizarTotal(parsed.data.length);
     syncVisibleCount();
 
@@ -1181,6 +1434,91 @@ function injectRuntimeStyles() {
   const style = document.createElement('style');
   style.id = 'runtime-enhancements-styles';
   style.textContent = `
+    .birthday-notice{
+      display:flex;
+      gap:14px;
+      align-items:flex-start;
+      margin: 0 0 16px;
+      padding: 14px 16px;
+      border: 1px solid rgba(206, 0, 113, 0.18);
+      border-radius: 18px;
+      background:
+        linear-gradient(135deg, rgba(206, 0, 113, 0.09), rgba(104, 13, 191, 0.07)),
+        #fff;
+      box-shadow: 0 8px 22px rgba(12, 10, 30, 0.06);
+    }
+
+    .birthday-notice.is-hidden{
+      display:none;
+    }
+
+    .birthday-notice__icon{
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: rgba(255, 255, 255, 0.72);
+      border:1px solid rgba(12, 10, 30, 0.08);
+      font-size: 1.35rem;
+      flex: 0 0 42px;
+    }
+
+    .birthday-notice__body{
+      min-width:0;
+    }
+
+    .birthday-notice__title{
+      margin: 0 0 8px;
+      font-weight: 800;
+      color: var(--azul-wagner, #0c0a1e);
+    }
+
+    .birthday-notice__list{
+      margin:0;
+      padding:0;
+      list-style:none;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
+    .birthday-notice__item{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:7px 10px;
+      border-radius:999px;
+      background: rgba(255,255,255,0.82);
+      border:1px solid rgba(12, 10, 30, 0.08);
+      color:#3f3f46;
+      font-size:0.88rem;
+    }
+
+    .birthday-notice__item span{
+      color:#666;
+      font-size:0.82rem;
+    }
+
+    @media (max-width: 640px){
+      .birthday-notice{
+        padding:12px;
+        border-radius:16px;
+      }
+
+      .birthday-notice__list{
+        display:grid;
+        grid-template-columns: 1fr;
+      }
+
+      .birthday-notice__item{
+        justify-content:space-between;
+        border-radius:14px;
+        align-items:flex-start;
+      }
+    }
+
     .toolbar-date-tools{
       display:flex;
       gap:10px;
