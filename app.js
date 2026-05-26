@@ -143,6 +143,11 @@ const HEADER_ALIASES = {
     'birthday',
     'birthdate',
     'date of birth'
+  ],
+  planSeleccionado: [
+    'plan seleccionado',
+    'plan',
+    'tipo de plan'
   ]
 };
 
@@ -363,6 +368,8 @@ function renderBirthdayWeekNotice(rows = []) {
   const birthdays = [];
 
   for (const row of rows) {
+    if (isBusinessBirthdayRow(row)) continue;
+
     const rawBirthday = row[birthdayCol];
     const parsedBirthday = parseBirthdayForYear(rawBirthday);
     if (!parsedBirthday) continue;
@@ -440,6 +447,12 @@ function getBirthdayColIndex() {
   }
 
   return -1;
+}
+
+function isBusinessBirthdayRow(row) {
+  const planCol = findHeaderIndex(HEADER_ALIASES.planSeleccionado, -1);
+  const planValue = planCol > -1 ? normKey(row[planCol]) : '';
+  return planValue.includes('empresarial');
 }
 
 function getBirthdayNearWindow(date) {
