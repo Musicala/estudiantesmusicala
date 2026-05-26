@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 
-<body>
+<body class="auth-pending">
   <a class="skip-link" href="#mainContent">Saltar al contenido</a>
 
   <!-- Topbar -->
@@ -51,11 +51,56 @@
         </div>
       </div>
 
-      <div class="tagline" aria-label="Slogan de Musicala">
-        <span>vida, alma y música</span>
+      <div class="topbar-actions">
+        <div class="tagline" aria-label="Slogan de Musicala">
+          <span>vida, alma y música</span>
+        </div>
+
+        <div id="authUserBox" class="auth-userbox" aria-live="polite" hidden>
+          <span class="auth-userbox__label">Sesión</span>
+          <strong id="authUserEmail" class="auth-userbox__email">—</strong>
+          <button id="btnLogout" class="btn btn-auth-logout" type="button">
+            Salir
+          </button>
+        </div>
       </div>
     </div>
   </header>
+
+
+
+  <!-- Acceso autorizado -->
+  <section id="authGate" class="auth-gate" aria-labelledby="authTitle" aria-live="polite">
+    <div class="auth-card">
+      <div class="auth-card__logoWrap">
+        <img src="logo.png" alt="Logo Musicala" class="auth-card__logo" loading="eager" decoding="async" />
+      </div>
+
+      <div class="auth-card__copy">
+        <p class="auth-card__eyebrow">Acceso privado</p>
+        <h1 id="authTitle">Panel de estudiantes Musicala</h1>
+        <p>
+          Para consultar la información de estudiantes debes iniciar sesión con una
+          cuenta autorizada de Musicala. Qué concepto tan revolucionario: cuidar los datos. 🔐
+        </p>
+      </div>
+
+      <button id="btnLoginGoogle" class="btn btn-google" type="button">
+        <span class="btn-google__icon" aria-hidden="true">G</span>
+        Iniciar sesión con Google
+      </button>
+
+      <p id="authError" class="auth-error" role="alert" hidden></p>
+
+      <div class="auth-help">
+        <strong>Correos autorizados:</strong>
+        <span>alekcaballeromusic@gmail.com</span>
+        <span>catalina.medina.leal@gmail.com</span>
+        <span>imusicala@gmail.com</span>
+        <span>musicalaasesor@gmail.com</span>
+      </div>
+    </div>
+  </section>
 
   <!-- Main -->
   <main class="page" id="mainContent" role="main">
@@ -371,6 +416,7 @@
     </div>
   </noscript>
 
-  <script src="app.js"></script>
+  <script type="module" src="auth.js"></script>
+  <script src="app.js" defer></script>
 </body>
 </html>

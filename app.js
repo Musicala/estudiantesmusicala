@@ -23,6 +23,9 @@ let HEADERS = [];
 let HEADER_INDEX = {};
 let ALL_ROWS = [];
 let EMPTY_COLUMN_INDEXES = new Set();
+let hasLoadedStudentData = false;
+let isLoadingStudentData = false;
+let isAuthorizedSession = false;
 
 const UI = {
   searchInput: 'customSearch',
@@ -159,8 +162,105 @@ document.addEventListener('DOMContentLoaded', () => {
   setupDateRangeFilter();
   initDrawer();
   bindUI();
-  cargarDatosDesdeTSV();
+  prepareAuthorizedDataLoad();
 });
+
+/* =========================
+   Auth gate
+========================= */
+function prepareAuthorizedDataLoad() {
+  lockStudentPanel();
+
+  window.addEventListener('musicala:auth-authorized', handleAuthorizedAccess);
+  window.addEventListener('musicala:auth-ready', handleAuthReady);
+  window.addEventListener('musicala:auth-signedout', handleSignedOutAccess);
+  window.addEventListener('musicala:auth-denied', handleDeniedAccess);
+  window.addEventListener('musicala:auth-error', handleAuthErrorAccess);
+
+  if (isAuthorizedByAuthLayer()) {
+    handleAuthorizedAccess();
+  } else {
+    setStatus('Inicia sesión con una cuenta autorizada para cargar los datos.');
+  }
+}
+
+function handleAuthReady() {
+  if (isAuthorizedByAuthLayer()) {
+    handleAuthorizedAccess();
+  }
+}
+
+function handleAuthorizedAccess() {
+  isAuthorizedSession = true;
+  unlockStudentPanel();
+
+  if (!hasLoadedStudentData && !isLoadingStudentData) {
+    cargarDatosDesdeTSV();
+  }
+}
+
+function handleSignedOutAccess() {
+  isAuthorizedSession = false;
+  clearSensitiveTableData();
+  lockStudentPanel();
+  setStatus('Sesión cerrada. Los datos del panel quedaron ocultos.');
+}
+
+function handleDeniedAccess(event) {
+  isAuthorizedSession = false;
+  clearSensitiveTableData();
+  lockStudentPanel();
+
+  const email = event?.detail?.email ? ` (${event.detail.email})` : '';
+  setStatus(`Acceso no autorizado${email}.`);
+}
+
+function handleAuthErrorAccess() {
+  isAuthorizedSession = false;
+  clearSensitiveTableData();
+  lockStudentPanel();
+  setStatus('No se pudo validar la sesión. Revisa Firebase Auth.');
+}
+
+function isAuthorizedByAuthLayer() {
+  return Boolean(window.MusicalaAuth && typeof window.MusicalaAuth.isAuthorized === 'function' && window.MusicalaAuth.isAuthorized());
+}
+
+function lockStudentPanel() {
+  const main = document.getElementById('mainContent');
+  if (main) main.setAttribute('aria-hidden', 'true');
+}
+
+function unlockStudentPanel() {
+  const main = document.getElementById('mainContent');
+  if (main) main.removeAttribute('aria-hidden');
+}
+
+function clearSensitiveTableData() {
+  closeDrawer();
+
+  if (dataTable) {
+    dataTable.clear();
+    dataTable.destroy();
+    dataTable = null;
+  }
+
+  const table = document.getElementById('tablaEstudiantes');
+  if (table) {
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    if (thead) thead.innerHTML = '';
+    if (tbody) tbody.innerHTML = '';
+  }
+
+  HEADERS = [];
+  HEADER_INDEX = {};
+  ALL_ROWS = [];
+  EMPTY_COLUMN_INDEXES = new Set();
+  hasLoadedStudentData = false;
+  isLoadingStudentData = false;
+  actualizarTotal(0);
+}
 
 /* =========================
    Init UI
@@ -679,6 +779,12 @@ function setupDateRangeFilter() {
    Carga + parse TSV
 ========================= */
 async function cargarDatosDesdeTSV() {
+  if (!isAuthorizedByAuthLayer()) {
+    setStatus('Inicia sesión con una cuenta autorizada para cargar los datos.');
+    return;
+  }
+
+  isLoadingStudentData = true;
   setStatus('Cargando datos de estudiantes…');
 
   try {
@@ -699,10 +805,14 @@ async function cargarDatosDesdeTSV() {
     actualizarTotal(parsed.data.length);
     syncVisibleCount();
 
+    hasLoadedStudentData = true;
     setStatus('Datos cargados correctamente ✅');
   } catch (err) {
     console.error('Error cargando datos:', err);
+    hasLoadedStudentData = false;
     setStatus('Error cargando datos. Revisa la URL TSV o los permisos del archivo.');
+  } finally {
+    isLoadingStudentData = false;
   }
 }
 
