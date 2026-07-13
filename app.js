@@ -19,6 +19,28 @@ const FIRESTORE_FIELDS = [
   ['studentName', 'Nombres y Apellidos (estudiante)'], ['status', 'Estado'], ['studentDocument', 'No. de documento (estudiante)'], ['birthDate', 'Fecha de nacimiento (estudiante)'], ['age', 'Edad'], ['studentCity', 'Localidad/Municipio de residencia (estudiante)'], ['studentAddress', 'Dirección de residencia (estudiante)'], ['studentEmail', 'Correo electrónico'], ['phone', 'Teléfono fijo'], ['mobile', 'Celular'], ['course', 'Curso'], ['instrument', 'Instrumento'], ['style', 'Estilo'], ['emphasis', 'Énfasis'], ['interests', 'Intereses musicales'], ['selectedPlan', 'Plan seleccionado'], ['modality', 'Modalidad'], ['eps', 'EPS'], ['rh', 'RH'], ['guardianName', 'Nombre completo (acudiente)'], ['guardianDocument', 'Número de identificación (acudiente)'], ['guardianMobile', 'Celular (acudiente)'], ['guardianPhone', 'Teléfono fijo (acudiente)'], ['guardianAddress', 'Dirección (acudiente)'], ['relationship', 'Parentesco'], ['referredName', 'Nombre (referido)'], ['referredMobile', 'Celular (referido)'], ['termsAgreement', 'Acuerdo de términos'], ['imageUseAuthorization', 'Autorización de imagen'], ['imageUseAuthorizationBy', 'Quién autoriza el uso de imagen'], ['healthCondition', 'Condición de salud relevante'], ['createdAt', 'Fecha de inscripción']
 ];
 const FIRESTORE_FIELD_BY_LABEL = Object.fromEntries(FIRESTORE_FIELDS.map(([key, label]) => [label, key]));
+const FIRESTORE_FIELD_ALIASES = {
+  studentName: ['studentName', 'nombres_y_apellidos_estudiante', 'nombres_y_apellidos_estudiante_2'],
+  status: ['status', 'estado'],
+  studentDocument: ['studentDocument', 'no_de_documento_estudiante'],
+  birthDate: ['birthDate', 'fecha_de_nacimiento_estudiante'],
+  age: ['age', 'edad'],
+  studentCity: ['studentCity', 'localidad_municipio_de_residencia_estudiante'],
+  studentAddress: ['studentAddress', 'direccion_de_residencia_estudiante'],
+  studentEmail: ['studentEmail', 'correo_electronico_envio_de_guias_e_informacion_adicional'],
+  phone: ['phone', 'telefono_fijo'],
+  mobile: ['mobile', 'celular'],
+  course: ['course', 'curso'], instrument: ['instrument', 'instrumento'], style: ['style', 'estilo'], emphasis: ['emphasis', 'enfasis'],
+  interests: ['interests'], selectedPlan: ['selectedPlan', 'plan_seleccionado'], modality: ['modality', 'modalidad'], eps: ['eps'], rh: ['rh'],
+  guardianName: ['guardianName', 'nombre_completo_acudiente'], guardianDocument: ['guardianDocument', 'tipo_y_numero_de_identificacion_acudiente'],
+  guardianMobile: ['guardianMobile', 'celular_acudiente'], guardianPhone: ['guardianPhone', 'telefono_fijo_acudiente'], guardianAddress: ['guardianAddress', 'direccion_acudiente'],
+  relationship: ['relationship', 'parentesco'], referredName: ['referredName', 'nombre_referido'], referredMobile: ['referredMobile', 'celular_referido'],
+  termsAgreement: ['termsAgreement', 'estas_de_acuerdo_con_los_terminos_y_condiciones_de_musicala'],
+  imageUseAuthorization: ['imageUseAuthorization', 'a_autoriza_a_musicala_para_tomar_fotos_y_videos_del_estudiante_y_compartirlos_en_redes_sociales_y_youtube'],
+  imageUseAuthorizationBy: ['imageUseAuthorizationBy', 'a_quia_n_otorga_la_autorizacia_n_de_uso_de_imagen'],
+  healthCondition: ['healthCondition', 'presentas_alguna_condicion_y_o_enfermedad_que_consideres_relevante_para_tus_clases', 'presentas_alguna_condicia_n_y_o_enfermedad_que_consideres_relevante_para_tus_clases'],
+  createdAt: ['createdAt', 'timestamp', 'marca_temporal', 'inscripcion', 'registration']
+};
 
 let dataTable = null;
 let HEADERS = [];
@@ -30,6 +52,7 @@ let isLoadingStudentData = false;
 let isAuthorizedSession = false;
 let unsubscribeStudents = null;
 let currentDrawerRecord = null;
+const STUDENT_RECORDS_BY_ID = new Map();
 
 const UI = {
   searchInput: 'customSearch',
@@ -803,6 +826,8 @@ function cargarDatosDesdeFirestore() {
     return;
   }
   unsubscribeStudents = api.subscribeStudents((students) => {
+    STUDENT_RECORDS_BY_ID.clear();
+    students.forEach((student) => STUDENT_RECORDS_BY_ID.set(student.id, student));
     const headers = ['ID de registro', ...FIRESTORE_FIELDS.map(([, label]) => label)];
     const rows = students.map(studentRecordToRow).sort((a, b) => String(a[1] || '').localeCompare(String(b[1] || ''), 'es'));
     ALL_ROWS = rows.slice();
@@ -827,7 +852,21 @@ function stopStudentSubscription() {
 }
 
 function studentRecordToRow(student) {
-  return [student.id, ...FIRESTORE_FIELDS.map(([key]) => formatFirestoreValue(student[key]))];
+  return [student.id, ...FIRESTORE_FIELDS.map(([key]) => formatFirestoreValue(getStudentFieldValue(student, key)))];
+}
+
+function getStudentFieldValue(student, fieldKey) {
+  const aliases = FIRESTORE_FIELD_ALIASES[fieldKey] || [fieldKey];
+  for (const key of aliases) {
+    const value = student?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+  }
+  return '';
+}
+
+function getStudentFieldSource(student, fieldKey) {
+  const aliases = FIRESTORE_FIELD_ALIASES[fieldKey] || [fieldKey];
+  return aliases.find((key) => student?.[key] !== undefined) || aliases[0];
 }
 
 function formatFirestoreValue(value) {
@@ -1157,9 +1196,10 @@ function openDrawerFromRow(rowData) {
 }
 
 function rowToStudentRecord(rowData) {
+  const raw = STUDENT_RECORDS_BY_ID.get(rowData[0]) || {};
   const data = {};
-  FIRESTORE_FIELDS.forEach(([key], index) => { data[key] = rowData[index + 1] ?? ''; });
-  return { id: rowData[0], data };
+  FIRESTORE_FIELDS.forEach(([key]) => { data[key] = formatFirestoreValue(getStudentFieldValue(raw, key)); });
+  return { id: rowData[0], raw, data };
 }
 
 function startStudentEdit() {
@@ -1183,7 +1223,9 @@ async function saveStudentEdit() {
   document.querySelectorAll('[data-student-field]').forEach((input) => {
     const key = input.dataset.studentField;
     const value = input.value.trim();
-    if (value !== String(currentDrawerRecord.data[key] ?? '')) changes[key] = value;
+    if (value !== String(currentDrawerRecord.data[key] ?? '')) {
+      changes[getStudentFieldSource(currentDrawerRecord.raw, key)] = value;
+    }
   });
   if (!Object.keys(changes).length) {
     setStatus('No hay cambios para guardar.');
