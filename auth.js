@@ -20,6 +20,7 @@ import {
   browserLocalPersistence
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
 import { getFirestore, collection, onSnapshot, updateDoc, deleteDoc, doc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyA12_rlUjYM2z4aFG4bf43Wf0tSNTxC0Vg',
@@ -44,6 +45,8 @@ const allowedEmailSet = new Set(ALLOWED_EMAILS.map(normalizeEmail));
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const functions = getFunctions(app, 'us-central1');
+const listHistoricalStudentsCallable = httpsCallable(functions, 'listHistoricalStudents');
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
@@ -60,8 +63,18 @@ window.MusicalaAuth = {
   subscribeStudents(onData, onError) {
     return onSnapshot(collection(db, 'estudiantes'), (snapshot) => onData(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), onError);
   },
-  updateStudent(studentId, changes) { return updateDoc(doc(db, 'estudiantes', studentId), { ...changes, updatedAt: serverTimestamp() }); },
-  deleteStudent(studentId) { return deleteDoc(doc(db, 'estudiantes', studentId)); },
+  async fetchHistoricalStudents() {
+    const response = await listHistoricalStudentsCallable({ schemaVersion: 1 });
+    return response?.data || { students: [], counts: {} };
+  },
+  updateStudent(studentId, changes) {
+    assertPrimaryStudentId(studentId);
+    return updateDoc(doc(db, 'estudiantes', studentId), { ...changes, updatedAt: serverTimestamp() });
+  },
+  deleteStudent(studentId) {
+    assertPrimaryStudentId(studentId);
+    return deleteDoc(doc(db, 'estudiantes', studentId));
+  },
   signOut: logout
 };
 
@@ -180,6 +193,13 @@ async function logout() {
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
+}
+
+function assertPrimaryStudentId(studentId) {
+  const safeId = String(studentId || '').trim();
+  if (!safeId || safeId.startsWith('historical:')) {
+    throw new Error('Los registros históricos consolidados son de solo lectura.');
+  }
 }
 
 function isEmailAllowed(email) {

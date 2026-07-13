@@ -3,6 +3,11 @@
 Panel privado conectado directamente a la colección `estudiantes` del proyecto
 Firebase `estudiantes-musicala`. Los datos se actualizan en tiempo real.
 
+La búsqueda también incorpora, mediante la callable autenticada
+`listHistoricalStudents`, las identidades históricas que ya existen en
+`bitacoras-de-clase/students` y usa Estudiantes HUB. Esas filas se muestran
+como solo lectura y no se copian ni modifican en Firebase.
+
 - Lectura: `alekcaballeromusic@gmail.com`, `catalina.medina.leal@gmail.com`,
   `adminmusicala@gmail.com` y `musicalaasesor@gmail.com`.
 - Modificación y eliminación: solo `alekcaballeromusic@gmail.com` y

@@ -620,6 +620,30 @@ table.dataTable tbody tr {
   background: var(--neutral);
 }
 
+.origin-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 280px;
+  padding: 4px 9px;
+  border: 1px solid rgba(20, 67, 207, 0.18);
+  border-radius: 999px;
+  background: rgba(20, 67, 207, 0.07);
+  color: var(--azul-wagner);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.origin-badge.is-historical {
+  border-color: rgba(240, 153, 8, 0.3);
+  background: rgba(240, 153, 8, 0.1);
+}
+
+.drawer__adminActions[hidden] {
+  display: none !important;
+}
+
 /* ==========================================================================
    FOOTER
 ========================================================================== */
