@@ -756,6 +756,9 @@ function setupDateRangeFilter() {
     const dateCol = getFechaInscripcionColIndex();
     if (dateCol < 0) return true;
 
+    const hasDateFilter = Boolean(FILTER_STATE.todayOnly || FILTER_STATE.exactDate || FILTER_STATE.month);
+    if (!hasDateFilter) return true;
+
     const rawDate = rowData[dateCol];
     const rowDate = parseFlexibleDate(rawDate);
     if (!rowDate) return false;
