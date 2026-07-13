@@ -41,6 +41,7 @@ const FIRESTORE_FIELD_ALIASES = {
   healthCondition: ['healthCondition', 'presentas_alguna_condicion_y_o_enfermedad_que_consideres_relevante_para_tus_clases', 'presentas_alguna_condicia_n_y_o_enfermedad_que_consideres_relevante_para_tus_clases'],
   createdAt: ['createdAt', 'timestamp', 'marca_temporal', 'inscripcion', 'registration']
 };
+const MAX_SAFE_DISPLAY_LENGTH = 2000;
 
 let dataTable = null;
 let HEADERS = [];
@@ -874,7 +875,8 @@ function formatFirestoreValue(value) {
   if (value instanceof Date) return value.toLocaleDateString('es-CO');
   if (Array.isArray(value)) return value.join(', ');
   if (value && typeof value === 'object') return '';
-  return value == null ? '' : String(value);
+  const text = value == null ? '' : String(value);
+  return text.length > MAX_SAFE_DISPLAY_LENGTH ? '' : text;
 }
 
 function parseTSV(text) {
@@ -1127,12 +1129,12 @@ function openDrawerFromRow(rowData) {
   const adminActions = document.getElementById('drawerAdminActions');
   if (adminActions) adminActions.hidden = !window.MusicalaAuth?.canEdit?.();
 
-  const nombre = getBestFieldValue(rowData, HEADER_ALIASES.nombre, [colLetterToDtIndex('A')]);
-  const telefono = getBestFieldValue(rowData, HEADER_ALIASES.telefono, [colLetterToDtIndex('K')]);
-  const acudiente = getBestFieldValue(rowData, HEADER_ALIASES.acudiente, [colLetterToDtIndex('U')]);
-  const telefonoAcudiente = getBestFieldValue(rowData, HEADER_ALIASES.telefonoAcudiente, [colLetterToDtIndex('W')]);
-  const estado = getBestFieldValue(rowData, HEADER_ALIASES.estado, [colLetterToDtIndex('B')]);
-  const fechaInscripcion = getBestFieldValue(rowData, HEADER_ALIASES.fechaInscripcion, [colLetterToDtIndex('AC')]);
+  const nombre = getRowValueForField(rowData, 'studentName');
+  const telefono = getRowValueForField(rowData, 'mobile') || getRowValueForField(rowData, 'phone');
+  const acudiente = getRowValueForField(rowData, 'guardianName');
+  const telefonoAcudiente = getRowValueForField(rowData, 'guardianMobile') || getRowValueForField(rowData, 'guardianPhone');
+  const estado = getRowValueForField(rowData, 'status');
+  const fechaInscripcion = getRowValueForField(rowData, 'createdAt');
 
   const displayName = isMeaningfulValue(nombre)
     ? String(nombre).trim()
@@ -1193,6 +1195,12 @@ function openDrawerFromRow(rowData) {
   drawer.classList.add('is-open');
   drawer.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+}
+
+function getRowValueForField(rowData, fieldKey) {
+  const label = FIRESTORE_FIELDS.find(([key]) => key === fieldKey)?.[1];
+  const index = label ? HEADERS.indexOf(label) : -1;
+  return index > -1 && isMeaningfulValue(rowData[index]) ? String(rowData[index]).trim() : '';
 }
 
 function rowToStudentRecord(rowData) {
