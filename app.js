@@ -15,8 +15,10 @@
   ✅ Descargar CSV respetando filtros actuales
 ============================================================================= */
 
-const TSV_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQQO-CBQoN1QZ4GFExJWmPz6YNLO6rhaIsWBv-Whlu9okpZRpcxfUtLYeAMKaiNOQJrrf3Vcwhk32kZ/pub?gid=2130299316&single=true&output=tsv';
+const FIRESTORE_FIELDS = [
+  ['studentName', 'Nombres y Apellidos (estudiante)'], ['status', 'Estado'], ['studentDocument', 'No. de documento (estudiante)'], ['birthDate', 'Fecha de nacimiento (estudiante)'], ['age', 'Edad'], ['studentCity', 'Localidad/Municipio de residencia (estudiante)'], ['studentAddress', 'Dirección de residencia (estudiante)'], ['studentEmail', 'Correo electrónico'], ['phone', 'Teléfono fijo'], ['mobile', 'Celular'], ['course', 'Curso'], ['instrument', 'Instrumento'], ['style', 'Estilo'], ['emphasis', 'Énfasis'], ['interests', 'Intereses musicales'], ['selectedPlan', 'Plan seleccionado'], ['modality', 'Modalidad'], ['eps', 'EPS'], ['rh', 'RH'], ['guardianName', 'Nombre completo (acudiente)'], ['guardianDocument', 'Número de identificación (acudiente)'], ['guardianMobile', 'Celular (acudiente)'], ['guardianPhone', 'Teléfono fijo (acudiente)'], ['guardianAddress', 'Dirección (acudiente)'], ['relationship', 'Parentesco'], ['referredName', 'Nombre (referido)'], ['referredMobile', 'Celular (referido)'], ['termsAgreement', 'Acuerdo de términos'], ['imageUseAuthorization', 'Autorización de imagen'], ['imageUseAuthorizationBy', 'Quién autoriza el uso de imagen'], ['healthCondition', 'Condición de salud relevante'], ['createdAt', 'Fecha de inscripción']
+];
+const FIRESTORE_FIELD_BY_LABEL = Object.fromEntries(FIRESTORE_FIELDS.map(([key, label]) => [label, key]));
 
 let dataTable = null;
 let HEADERS = [];
@@ -26,6 +28,8 @@ let EMPTY_COLUMN_INDEXES = new Set();
 let hasLoadedStudentData = false;
 let isLoadingStudentData = false;
 let isAuthorizedSession = false;
+let unsubscribeStudents = null;
+let currentDrawerRecord = null;
 
 const UI = {
   searchInput: 'customSearch',
@@ -195,12 +199,13 @@ function handleAuthorizedAccess() {
   unlockStudentPanel();
 
   if (!hasLoadedStudentData && !isLoadingStudentData) {
-    cargarDatosDesdeTSV();
+    cargarDatosDesdeFirestore();
   }
 }
 
 function handleSignedOutAccess() {
   isAuthorizedSession = false;
+  stopStudentSubscription();
   clearSensitiveTableData();
   lockStudentPanel();
   setStatus('Sesión cerrada. Los datos del panel quedaron ocultos.');
@@ -208,6 +213,7 @@ function handleSignedOutAccess() {
 
 function handleDeniedAccess(event) {
   isAuthorizedSession = false;
+  stopStudentSubscription();
   clearSensitiveTableData();
   lockStudentPanel();
 
@@ -778,42 +784,55 @@ function setupDateRangeFilter() {
 /* =========================
    Carga + parse TSV
 ========================= */
-async function cargarDatosDesdeTSV() {
+function cargarDatosDesdeFirestore() {
   if (!isAuthorizedByAuthLayer()) {
     setStatus('Inicia sesión con una cuenta autorizada para cargar los datos.');
     return;
   }
 
   isLoadingStudentData = true;
-  setStatus('Cargando datos de estudiantes…');
-
-  try {
-    const url = withCacheBuster(TSV_URL);
-    const res = await fetch(url, { method: 'GET', cache: 'no-store' });
-    if (!res.ok) throw new Error('Error HTTP ' + res.status);
-
-    const text = await res.text();
-    const parsed = parseTSV(text);
-
-    if (!parsed.headers.length) {
-      throw new Error('Encabezados vacíos o TSV inválido');
-    }
-
-    ALL_ROWS = parsed.data.slice();
-    construirTabla(parsed.headers, parsed.data);
-    renderBirthdayWeekNotice(parsed.data);
-    actualizarTotal(parsed.data.length);
-    syncVisibleCount();
-
-    hasLoadedStudentData = true;
-    setStatus('Datos cargados correctamente ✅');
-  } catch (err) {
-    console.error('Error cargando datos:', err);
-    hasLoadedStudentData = false;
-    setStatus('Error cargando datos. Revisa la URL TSV o los permisos del archivo.');
-  } finally {
+  setStatus('Cargando datos de estudiantes desde Firebase…');
+  stopStudentSubscription();
+  const api = window.MusicalaAuth;
+  if (!api?.subscribeStudents) {
     isLoadingStudentData = false;
+    setStatus('Firebase no está listo. Intenta de nuevo.');
+    return;
   }
+  unsubscribeStudents = api.subscribeStudents((students) => {
+    const headers = ['ID de registro', ...FIRESTORE_FIELDS.map(([, label]) => label)];
+    const rows = students.map(studentRecordToRow).sort((a, b) => String(a[1] || '').localeCompare(String(b[1] || ''), 'es'));
+    ALL_ROWS = rows.slice();
+    construirTabla(headers, rows);
+    renderBirthdayWeekNotice(rows);
+    actualizarTotal(rows.length);
+    syncVisibleCount();
+    hasLoadedStudentData = true;
+    isLoadingStudentData = false;
+    setStatus(`Datos sincronizados con Firebase (${rows.length} registros) ✅`);
+  }, (err) => {
+    console.error('Error cargando estudiantes desde Firestore:', err);
+    hasLoadedStudentData = false;
+    isLoadingStudentData = false;
+    setStatus('No se pudieron cargar los datos de Firebase. Revisa permisos y conexión.');
+  });
+}
+
+function stopStudentSubscription() {
+  if (typeof unsubscribeStudents === 'function') unsubscribeStudents();
+  unsubscribeStudents = null;
+}
+
+function studentRecordToRow(student) {
+  return [student.id, ...FIRESTORE_FIELDS.map(([key]) => formatFirestoreValue(student[key]))];
+}
+
+function formatFirestoreValue(value) {
+  if (value && typeof value.toDate === 'function') return value.toDate().toLocaleDateString('es-CO');
+  if (value instanceof Date) return value.toLocaleDateString('es-CO');
+  if (Array.isArray(value)) return value.join(', ');
+  if (value && typeof value === 'object') return '';
+  return value == null ? '' : String(value);
 }
 
 function parseTSV(text) {
@@ -1034,6 +1053,9 @@ function initDrawer() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeDrawer();
   });
+
+  document.getElementById('btnEditStudent')?.addEventListener('click', startStudentEdit);
+  document.getElementById('btnDeleteStudent')?.addEventListener('click', deleteCurrentStudent);
 }
 
 function wireRowClick() {
@@ -1059,6 +1081,9 @@ function openDrawerFromRow(rowData) {
   const telActions = document.getElementById(DRAWER_IDS.pTelActions);
   const telAcActions = document.getElementById(DRAWER_IDS.pTelAcudienteActions);
   const fieldsEl = document.getElementById(DRAWER_IDS.fields);
+  currentDrawerRecord = rowToStudentRecord(rowData);
+  const adminActions = document.getElementById('drawerAdminActions');
+  if (adminActions) adminActions.hidden = !window.MusicalaAuth?.canEdit?.();
 
   const nombre = getBestFieldValue(rowData, HEADER_ALIASES.nombre, [colLetterToDtIndex('A')]);
   const telefono = getBestFieldValue(rowData, HEADER_ALIASES.telefono, [colLetterToDtIndex('K')]);
@@ -1128,6 +1153,63 @@ function openDrawerFromRow(rowData) {
   document.body.style.overflow = 'hidden';
 }
 
+function rowToStudentRecord(rowData) {
+  const data = {};
+  FIRESTORE_FIELDS.forEach(([key], index) => { data[key] = rowData[index + 1] ?? ''; });
+  return { id: rowData[0], data };
+}
+
+function startStudentEdit() {
+  if (!window.MusicalaAuth?.canEdit?.() || !currentDrawerRecord) return;
+  const fieldsEl = document.getElementById(DRAWER_IDS.fields);
+  if (!fieldsEl) return;
+  fieldsEl.innerHTML = '<div class="drawer__editActions"><button id="btnSaveStudentEdit" class="btn" type="button">Guardar cambios</button><button id="btnCancelStudentEdit" class="btn btn-ghost" type="button">Cancelar</button></div>';
+  FIRESTORE_FIELDS.filter(([key]) => key !== 'createdAt').forEach(([key, label]) => {
+    const row = document.createElement('div');
+    row.className = 'kv__row';
+    row.innerHTML = `<dt class="kv__k">${escapeHtml(label)}</dt><dd class="kv__v"><input class="kv__input" data-student-field="${escapeHtml(key)}" value="${escapeHtml(currentDrawerRecord.data[key])}"></dd>`;
+    fieldsEl.appendChild(row);
+  });
+  document.getElementById('btnSaveStudentEdit')?.addEventListener('click', saveStudentEdit);
+  document.getElementById('btnCancelStudentEdit')?.addEventListener('click', () => openDrawerFromRow(studentRecordToRow({ id: currentDrawerRecord.id, ...currentDrawerRecord.data })));
+}
+
+async function saveStudentEdit() {
+  if (!window.MusicalaAuth?.canEdit?.() || !currentDrawerRecord) return;
+  const changes = {};
+  document.querySelectorAll('[data-student-field]').forEach((input) => {
+    const key = input.dataset.studentField;
+    const value = input.value.trim();
+    if (value !== String(currentDrawerRecord.data[key] ?? '')) changes[key] = value;
+  });
+  if (!Object.keys(changes).length) {
+    setStatus('No hay cambios para guardar.');
+    return;
+  }
+  try {
+    await window.MusicalaAuth.updateStudent(currentDrawerRecord.id, changes);
+    setStatus('Registro actualizado en Firebase ✅');
+    closeDrawer();
+  } catch (error) {
+    console.error('No se pudo actualizar el registro:', error);
+    setStatus('No se pudo actualizar el registro. Verifica tus permisos.');
+  }
+}
+
+async function deleteCurrentStudent() {
+  if (!window.MusicalaAuth?.canEdit?.() || !currentDrawerRecord) return;
+  const name = currentDrawerRecord.data.studentName || 'este registro';
+  if (!window.confirm(`¿Eliminar definitivamente a ${name}? Esta acción no se puede deshacer.`)) return;
+  try {
+    await window.MusicalaAuth.deleteStudent(currentDrawerRecord.id);
+    closeDrawer();
+    setStatus('Registro eliminado definitivamente de Firebase ✅');
+  } catch (error) {
+    console.error('No se pudo eliminar el registro:', error);
+    setStatus('No se pudo eliminar el registro. Verifica tus permisos.');
+  }
+}
+
 function setPrimaryValue(id, value, alwaysVisible = false) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -1151,6 +1233,7 @@ function closeDrawer() {
   drawer.classList.remove('is-open');
   drawer.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
+  currentDrawerRecord = null;
 }
 
 /* =========================

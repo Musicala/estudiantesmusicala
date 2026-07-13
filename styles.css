@@ -1120,6 +1120,12 @@ table.dataTable tbody tr {
     margin-right: 8px;
   }
 }
+
+.drawer__adminActions { display: flex; gap: 8px; align-items: center; }
+.btn-danger { background: #b42318; color: #fff; border-color: #b42318; }
+.btn-danger:hover { background: #8f1d15; border-color: #8f1d15; }
+.kv__input { width: 100%; min-height: 34px; border: 1px solid #b9bfd3; border-radius: 7px; padding: 6px 8px; font: inherit; }
+.drawer__editActions { display: flex; gap: 8px; margin: 0 0 14px; }
 /* ==========================================================================
    AUTH / LOGIN GOOGLE
 ========================================================================== */

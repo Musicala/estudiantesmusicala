@@ -19,6 +19,7 @@ import {
   setPersistence,
   browserLocalPersistence
 } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js';
+import { getFirestore, collection, onSnapshot, updateDoc, deleteDoc, doc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyA12_rlUjYM2z4aFG4bf43Wf0tSNTxC0Vg',
@@ -32,14 +33,17 @@ const firebaseConfig = {
 const ALLOWED_EMAILS = [
   'alekcaballeromusic@gmail.com',
   'catalina.medina.leal@gmail.com',
-  'imusicala@gmail.com',
+  'adminmusicala@gmail.com',
   'musicalaasesor@gmail.com'
 ];
+
+const EDITOR_EMAILS = ['alekcaballeromusic@gmail.com', 'catalina.medina.leal@gmail.com'];
 
 const allowedEmailSet = new Set(ALLOWED_EMAILS.map(normalizeEmail));
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: 'select_account' });
 
@@ -48,9 +52,16 @@ let authInitialized = false;
 
 window.MusicalaAuth = {
   allowedEmails: ALLOWED_EMAILS.slice(),
+  editorEmails: EDITOR_EMAILS.slice(),
   isEmailAllowed,
+  canEdit: () => Boolean(currentAuthorizedUser && EDITOR_EMAILS.includes(normalizeEmail(currentAuthorizedUser.email))),
   isAuthorized: () => Boolean(currentAuthorizedUser && isEmailAllowed(currentAuthorizedUser.email)),
   getCurrentUser: () => currentAuthorizedUser,
+  subscribeStudents(onData, onError) {
+    return onSnapshot(collection(db, 'estudiantes'), (snapshot) => onData(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))), onError);
+  },
+  updateStudent(studentId, changes) { return updateDoc(doc(db, 'estudiantes', studentId), { ...changes, updatedAt: serverTimestamp() }); },
+  deleteStudent(studentId) { return deleteDoc(doc(db, 'estudiantes', studentId)); },
   signOut: logout
 };
 

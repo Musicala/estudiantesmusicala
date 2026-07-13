@@ -323,7 +323,7 @@
 
     <footer class="footer" role="contentinfo">
       <span>Musicala · Estudiantes 2026</span>
-      <span>Datos sincronizados desde Google Sheets · Solo lectura</span>
+      <span>Datos sincronizados desde Firebase · Actualización en tiempo real</span>
     </footer>
   </main>
 
@@ -347,6 +347,11 @@
         <div class="drawer__titlewrap">
           <h2 id="drawerTitle" class="drawer__title">Ficha</h2>
           <p id="drawerSubtitle" class="drawer__subtitle">Ficha del estudiante</p>
+        </div>
+
+        <div id="drawerAdminActions" class="drawer__adminActions" hidden>
+          <button id="btnEditStudent" class="btn btn-ghost" type="button">Modificar</button>
+          <button id="btnDeleteStudent" class="btn btn-danger" type="button">Eliminar</button>
         </div>
 
         <button
