@@ -16,13 +16,19 @@
 ============================================================================= */
 
 const FIRESTORE_FIELDS = [
+  ['ripAreas', 'Áreas (RIP)'], ['ripTechniques', 'Técnicas (RIP)'],
   ['studentName', 'Nombres y Apellidos (estudiante)'], ['status', 'Estado'], ['studentDocument', 'No. de documento (estudiante)'], ['birthDate', 'Fecha de nacimiento (estudiante)'], ['age', 'Edad'], ['studentCity', 'Localidad/Municipio de residencia (estudiante)'], ['studentAddress', 'Dirección de residencia (estudiante)'], ['studentEmail', 'Correo electrónico'], ['phone', 'Teléfono fijo'], ['mobile', 'Celular'], ['course', 'Curso'], ['instrument', 'Instrumento'], ['style', 'Estilo'], ['emphasis', 'Énfasis'], ['interests', 'Intereses musicales'], ['selectedPlan', 'Plan seleccionado'], ['modality', 'Modalidad'], ['eps', 'EPS'], ['rh', 'RH'], ['guardianName', 'Nombre completo (acudiente)'], ['guardianDocument', 'Número de identificación (acudiente)'], ['guardianMobile', 'Celular (acudiente)'], ['guardianPhone', 'Teléfono fijo (acudiente)'], ['guardianAddress', 'Dirección (acudiente)'], ['relationship', 'Parentesco'], ['referredName', 'Nombre (referido)'], ['referredMobile', 'Celular (referido)'], ['termsAgreement', 'Acuerdo de términos'], ['imageUseAuthorization', 'Autorización de imagen'], ['imageUseAuthorizationBy', 'Quién autoriza el uso de imagen'], ['healthCondition', 'Condición de salud relevante'], ['createdAt', 'Fecha de inscripción']
   , ['recordOrigin', 'Origen del registro']
 ];
+// Las columnas publicadas por RIP van junto al estado, no antes del nombre.
+const RIP_LIST_COLUMNS = FIRESTORE_FIELDS.splice(0, 2);
+FIRESTORE_FIELDS.splice(2, 0, ...RIP_LIST_COLUMNS);
 const FIRESTORE_FIELD_BY_LABEL = Object.fromEntries(FIRESTORE_FIELDS.map(([key, label]) => [label, key]));
 const FIRESTORE_FIELD_ALIASES = {
   studentName: ['studentName', 'nombres_y_apellidos_estudiante', 'nombres_y_apellidos_estudiante_2'],
   status: ['status', 'estado'],
+  ripAreas: ['rip.areas', 'rip.cursos', 'cursos'],
+  ripTechniques: ['rip.tecnicas'],
   recordOrigin: ['recordOrigin'],
   studentDocument: ['studentDocument', 'no_de_documento_estudiante'],
   birthDate: ['birthDate', 'fecha_de_nacimiento_estudiante'],
@@ -32,7 +38,7 @@ const FIRESTORE_FIELD_ALIASES = {
   studentEmail: ['studentEmail', 'correo_electronico_envio_de_guias_e_informacion_adicional'],
   phone: ['phone', 'telefono_fijo'],
   mobile: ['mobile', 'celular'],
-  course: ['course', 'curso'], instrument: ['instrument', 'instrumento'], style: ['style', 'estilo'], emphasis: ['emphasis', 'enfasis'],
+  course: ['rip.curso', 'rip.cursos', 'course', 'curso'], instrument: ['rip.instrumento', 'rip.instrumentos', 'instrument', 'instrumento'], style: ['rip.estilo', 'rip.estilos', 'style', 'estilo'], emphasis: ['rip.enfasis', 'emphasis', 'enfasis'],
   interests: ['interests'], selectedPlan: ['selectedPlan', 'plan_seleccionado'], modality: ['modality', 'modalidad'], eps: ['eps'], rh: ['rh'],
   guardianName: ['guardianName', 'nombre_completo_acudiente'], guardianDocument: ['guardianDocument', 'tipo_y_numero_de_identificacion_acudiente'],
   guardianMobile: ['guardianMobile', 'celular_acudiente'], guardianPhone: ['guardianPhone', 'telefono_fijo_acudiente'], guardianAddress: ['guardianAddress', 'direccion_acudiente'],
@@ -44,6 +50,7 @@ const FIRESTORE_FIELD_ALIASES = {
   createdAt: ['createdAt', 'timestamp', 'marca_temporal', 'inscripcion', 'registration']
 };
 const MAX_SAFE_DISPLAY_LENGTH = 2000;
+const RIP_MANAGED_FIELDS = new Set(['status', 'ripAreas', 'ripTechniques', 'course', 'instrument', 'style', 'emphasis']);
 
 let dataTable = null;
 let HEADERS = [];
@@ -953,7 +960,7 @@ function getStudentFieldValue(student, fieldKey) {
   }
   const aliases = FIRESTORE_FIELD_ALIASES[fieldKey] || [fieldKey];
   for (const key of aliases) {
-    const value = student?.[key];
+    const value = getNestedFieldValue(student, key);
     if (value !== undefined && value !== null && String(value).trim() !== '') return value;
   }
   return '';
@@ -961,7 +968,11 @@ function getStudentFieldValue(student, fieldKey) {
 
 function getStudentFieldSource(student, fieldKey) {
   const aliases = FIRESTORE_FIELD_ALIASES[fieldKey] || [fieldKey];
-  return aliases.find((key) => student?.[key] !== undefined) || aliases[0];
+  return aliases.find((key) => !key.includes('.') && student?.[key] !== undefined) || aliases.find((key) => !key.includes('.')) || aliases[0];
+}
+
+function getNestedFieldValue(record, path) {
+  return String(path || '').split('.').reduce((value, key) => value?.[key], record);
 }
 
 function formatFirestoreValue(value) {
@@ -1339,7 +1350,7 @@ function startStudentEdit() {
   const fieldsEl = document.getElementById(DRAWER_IDS.fields);
   if (!fieldsEl) return;
   fieldsEl.innerHTML = '<div class="drawer__editActions"><button id="btnSaveStudentEdit" class="btn" type="button">Guardar cambios</button><button id="btnCancelStudentEdit" class="btn btn-ghost" type="button">Cancelar</button></div>';
-  FIRESTORE_FIELDS.filter(([key]) => !['createdAt', 'recordOrigin'].includes(key)).forEach(([key, label]) => {
+  FIRESTORE_FIELDS.filter(([key]) => !['createdAt', 'recordOrigin'].includes(key) && !RIP_MANAGED_FIELDS.has(key)).forEach(([key, label]) => {
     const row = document.createElement('div');
     row.className = 'kv__row';
     row.innerHTML = `<dt class="kv__k">${escapeHtml(label)}</dt><dd class="kv__v"><input class="kv__input" data-student-field="${escapeHtml(key)}" value="${escapeHtml(currentDrawerRecord.data[key])}"></dd>`;
