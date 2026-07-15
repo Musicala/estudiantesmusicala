@@ -15,8 +15,42 @@
   ✅ Descargar CSV respetando filtros actuales
 ============================================================================= */
 
-const TSV_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQQO-CBQoN1QZ4GFExJWmPz6YNLO6rhaIsWBv-Whlu9okpZRpcxfUtLYeAMKaiNOQJrrf3Vcwhk32kZ/pub?gid=2130299316&single=true&output=tsv';
+const FIRESTORE_FIELDS = [
+  ['ripAreas', 'Áreas (RIP)'], ['ripTechniques', 'Técnicas (RIP)'],
+  ['studentName', 'Nombres y Apellidos (estudiante)'], ['status', 'Estado'], ['studentDocument', 'No. de documento (estudiante)'], ['birthDate', 'Fecha de nacimiento (estudiante)'], ['age', 'Edad'], ['studentCity', 'Localidad/Municipio de residencia (estudiante)'], ['studentAddress', 'Dirección de residencia (estudiante)'], ['studentEmail', 'Correo electrónico'], ['phone', 'Teléfono fijo'], ['mobile', 'Celular'], ['course', 'Curso'], ['instrument', 'Instrumento'], ['style', 'Estilo'], ['emphasis', 'Énfasis'], ['interests', 'Intereses musicales'], ['selectedPlan', 'Plan seleccionado'], ['modality', 'Modalidad'], ['eps', 'EPS'], ['rh', 'RH'], ['guardianName', 'Nombre completo (acudiente)'], ['guardianDocument', 'Número de identificación (acudiente)'], ['guardianMobile', 'Celular (acudiente)'], ['guardianPhone', 'Teléfono fijo (acudiente)'], ['guardianAddress', 'Dirección (acudiente)'], ['relationship', 'Parentesco'], ['referredName', 'Nombre (referido)'], ['referredMobile', 'Celular (referido)'], ['termsAgreement', 'Acuerdo de términos'], ['imageUseAuthorization', 'Autorización de imagen'], ['imageUseAuthorizationBy', 'Quién autoriza el uso de imagen'], ['healthCondition', 'Condición de salud relevante'], ['createdAt', 'Fecha de inscripción']
+  , ['recordOrigin', 'Origen del registro']
+];
+// Las columnas publicadas por RIP van junto al estado, no antes del nombre.
+const RIP_LIST_COLUMNS = FIRESTORE_FIELDS.splice(0, 2);
+FIRESTORE_FIELDS.splice(2, 0, ...RIP_LIST_COLUMNS);
+const FIRESTORE_FIELD_BY_LABEL = Object.fromEntries(FIRESTORE_FIELDS.map(([key, label]) => [label, key]));
+const FIRESTORE_FIELD_ALIASES = {
+  studentName: ['studentName', 'nombres_y_apellidos_estudiante', 'nombres_y_apellidos_estudiante_2'],
+  status: ['status', 'estado'],
+  ripAreas: ['rip.areas', 'rip.cursos', 'cursos'],
+  ripTechniques: ['rip.tecnicas'],
+  recordOrigin: ['recordOrigin'],
+  studentDocument: ['studentDocument', 'no_de_documento_estudiante'],
+  birthDate: ['birthDate', 'fecha_de_nacimiento_estudiante'],
+  age: ['age', 'edad'],
+  studentCity: ['studentCity', 'localidad_municipio_de_residencia_estudiante'],
+  studentAddress: ['studentAddress', 'direccion_de_residencia_estudiante'],
+  studentEmail: ['studentEmail', 'correo_electronico_envio_de_guias_e_informacion_adicional'],
+  phone: ['phone', 'telefono_fijo'],
+  mobile: ['mobile', 'celular'],
+  course: ['rip.curso', 'rip.cursos', 'course', 'curso'], instrument: ['rip.instrumento', 'rip.instrumentos', 'instrument', 'instrumento'], style: ['rip.estilo', 'rip.estilos', 'style', 'estilo'], emphasis: ['rip.enfasis', 'emphasis', 'enfasis'],
+  interests: ['interests'], selectedPlan: ['selectedPlan', 'plan_seleccionado'], modality: ['modality', 'modalidad'], eps: ['eps'], rh: ['rh'],
+  guardianName: ['guardianName', 'nombre_completo_acudiente'], guardianDocument: ['guardianDocument', 'tipo_y_numero_de_identificacion_acudiente'],
+  guardianMobile: ['guardianMobile', 'celular_acudiente'], guardianPhone: ['guardianPhone', 'telefono_fijo_acudiente'], guardianAddress: ['guardianAddress', 'direccion_acudiente'],
+  relationship: ['relationship', 'parentesco'], referredName: ['referredName', 'nombre_referido'], referredMobile: ['referredMobile', 'celular_referido'],
+  termsAgreement: ['termsAgreement', 'estas_de_acuerdo_con_los_terminos_y_condiciones_de_musicala'],
+  imageUseAuthorization: ['imageUseAuthorization', 'a_autoriza_a_musicala_para_tomar_fotos_y_videos_del_estudiante_y_compartirlos_en_redes_sociales_y_youtube'],
+  imageUseAuthorizationBy: ['imageUseAuthorizationBy', 'a_quia_n_otorga_la_autorizacia_n_de_uso_de_imagen'],
+  healthCondition: ['healthCondition', 'presentas_alguna_condicion_y_o_enfermedad_que_consideres_relevante_para_tus_clases', 'presentas_alguna_condicia_n_y_o_enfermedad_que_consideres_relevante_para_tus_clases'],
+  createdAt: ['createdAt', 'timestamp', 'marca_temporal', 'inscripcion', 'registration']
+};
+const MAX_SAFE_DISPLAY_LENGTH = 2000;
+const RIP_MANAGED_FIELDS = new Set(['status', 'ripAreas', 'ripTechniques', 'course', 'instrument', 'style', 'emphasis']);
 
 let dataTable = null;
 let HEADERS = [];
@@ -26,6 +60,14 @@ let EMPTY_COLUMN_INDEXES = new Set();
 let hasLoadedStudentData = false;
 let isLoadingStudentData = false;
 let isAuthorizedSession = false;
+let unsubscribeStudents = null;
+let currentDrawerRecord = null;
+const STUDENT_RECORDS_BY_ID = new Map();
+let PRIMARY_STUDENTS = [];
+let HISTORICAL_STUDENTS = [];
+let historicalDirectoryState = 'idle';
+let historicalDirectoryCounts = {};
+let substitutedCorruptPrimaryCount = 0;
 
 const UI = {
   searchInput: 'customSearch',
@@ -195,12 +237,13 @@ function handleAuthorizedAccess() {
   unlockStudentPanel();
 
   if (!hasLoadedStudentData && !isLoadingStudentData) {
-    cargarDatosDesdeTSV();
+    cargarDatosDesdeFirestore();
   }
 }
 
 function handleSignedOutAccess() {
   isAuthorizedSession = false;
+  stopStudentSubscription();
   clearSensitiveTableData();
   lockStudentPanel();
   setStatus('Sesión cerrada. Los datos del panel quedaron ocultos.');
@@ -208,6 +251,7 @@ function handleSignedOutAccess() {
 
 function handleDeniedAccess(event) {
   isAuthorizedSession = false;
+  stopStudentSubscription();
   clearSensitiveTableData();
   lockStudentPanel();
 
@@ -256,6 +300,12 @@ function clearSensitiveTableData() {
   HEADERS = [];
   HEADER_INDEX = {};
   ALL_ROWS = [];
+  STUDENT_RECORDS_BY_ID.clear();
+  PRIMARY_STUDENTS = [];
+  HISTORICAL_STUDENTS = [];
+  historicalDirectoryState = 'idle';
+  historicalDirectoryCounts = {};
+  substitutedCorruptPrimaryCount = 0;
   EMPTY_COLUMN_INDEXES = new Set();
   hasLoadedStudentData = false;
   isLoadingStudentData = false;
@@ -282,7 +332,7 @@ function bindUI() {
   if (searchInput) {
     const debouncedSearch = debounce((value) => {
       if (!dataTable) return;
-      dataTable.search(String(value || '')).draw();
+      dataTable.search(normalizeText(value)).draw();
       refreshSelectOptions();
       syncVisibleCount();
     }, 120);
@@ -750,6 +800,9 @@ function setupDateRangeFilter() {
     const dateCol = getFechaInscripcionColIndex();
     if (dateCol < 0) return true;
 
+    const hasDateFilter = Boolean(FILTER_STATE.todayOnly || FILTER_STATE.exactDate || FILTER_STATE.month);
+    if (!hasDateFilter) return true;
+
     const rawDate = rowData[dateCol];
     const rowDate = parseFlexibleDate(rawDate);
     if (!rowDate) return false;
@@ -778,42 +831,163 @@ function setupDateRangeFilter() {
 /* =========================
    Carga + parse TSV
 ========================= */
-async function cargarDatosDesdeTSV() {
+function cargarDatosDesdeFirestore() {
   if (!isAuthorizedByAuthLayer()) {
     setStatus('Inicia sesión con una cuenta autorizada para cargar los datos.');
     return;
   }
 
   isLoadingStudentData = true;
-  setStatus('Cargando datos de estudiantes…');
-
-  try {
-    const url = withCacheBuster(TSV_URL);
-    const res = await fetch(url, { method: 'GET', cache: 'no-store' });
-    if (!res.ok) throw new Error('Error HTTP ' + res.status);
-
-    const text = await res.text();
-    const parsed = parseTSV(text);
-
-    if (!parsed.headers.length) {
-      throw new Error('Encabezados vacíos o TSV inválido');
-    }
-
-    ALL_ROWS = parsed.data.slice();
-    construirTabla(parsed.headers, parsed.data);
-    renderBirthdayWeekNotice(parsed.data);
-    actualizarTotal(parsed.data.length);
-    syncVisibleCount();
-
-    hasLoadedStudentData = true;
-    setStatus('Datos cargados correctamente ✅');
-  } catch (err) {
-    console.error('Error cargando datos:', err);
-    hasLoadedStudentData = false;
-    setStatus('Error cargando datos. Revisa la URL TSV o los permisos del archivo.');
-  } finally {
+  setStatus('Cargando datos de estudiantes desde Firebase…');
+  stopStudentSubscription();
+  const api = window.MusicalaAuth;
+  if (!api?.subscribeStudents) {
     isLoadingStudentData = false;
+    setStatus('Firebase no está listo. Intenta de nuevo.');
+    return;
   }
+  unsubscribeStudents = api.subscribeStudents((students) => {
+    PRIMARY_STUDENTS = students.map((student) => {
+      const dataQualityHold = hasUnsafeDisplayValue(student);
+      return {
+        ...student,
+        recordOrigin: dataQualityHold
+          ? 'Inscripción Firebase · datos bloqueados para revisión'
+          : 'Inscripción Firebase',
+        _recordOrigin: 'primary',
+        _readOnly: dataQualityHold,
+        _dataQualityHold: dataQualityHold
+      };
+    });
+    renderCombinedStudentDirectory();
+  }, (err) => {
+    console.error('Error cargando estudiantes desde Firestore:', err);
+    hasLoadedStudentData = false;
+    isLoadingStudentData = false;
+    setStatus('No se pudieron cargar los datos de Firebase. Revisa permisos y conexión.');
+  });
+
+  loadHistoricalStudentDirectory();
+}
+
+async function loadHistoricalStudentDirectory() {
+  if (historicalDirectoryState === 'loading' || historicalDirectoryState === 'ready') return;
+  const api = window.MusicalaAuth;
+  if (!api?.fetchHistoricalStudents) {
+    historicalDirectoryState = 'failed';
+    return;
+  }
+
+  historicalDirectoryState = 'loading';
+  try {
+    const response = await api.fetchHistoricalStudents();
+    if (!isAuthorizedSession) return;
+    HISTORICAL_STUDENTS = Array.isArray(response?.students)
+      ? response.students.map((student) => ({ ...student, _readOnly: true, _recordOrigin: 'historical' }))
+      : [];
+    historicalDirectoryCounts = response?.counts || {};
+    historicalDirectoryState = 'ready';
+    renderCombinedStudentDirectory();
+  } catch (error) {
+    console.error('No se pudo cargar el directorio histórico:', error);
+    if (!isAuthorizedSession) return;
+    HISTORICAL_STUDENTS = [];
+    historicalDirectoryState = 'failed';
+    renderCombinedStudentDirectory();
+  }
+}
+
+function renderCombinedStudentDirectory() {
+  const historicalNameKeys = new Set(
+    HISTORICAL_STUDENTS.map((student) => normalizeText(getStudentFieldValue(student, 'studentName'))).filter(Boolean)
+  );
+  substitutedCorruptPrimaryCount = 0;
+  const visiblePrimaryStudents = PRIMARY_STUDENTS.filter((student) => {
+    if (!student._dataQualityHold) return true;
+    const key = normalizeText(getStudentFieldValue(student, 'studentName'));
+    if (!key || !historicalNameKeys.has(key)) return true;
+    substitutedCorruptPrimaryCount += 1;
+    return false;
+  });
+  const students = [...visiblePrimaryStudents, ...HISTORICAL_STUDENTS];
+  STUDENT_RECORDS_BY_ID.clear();
+  students.forEach((student) => STUDENT_RECORDS_BY_ID.set(student.id, student));
+
+  const headers = ['ID de registro', ...FIRESTORE_FIELDS.map(([, label]) => label)];
+  const rows = students
+    .map(studentRecordToRow)
+    .sort((a, b) => String(a[1] || '').localeCompare(String(b[1] || ''), 'es'));
+  ALL_ROWS = rows.slice();
+  construirTabla(headers, rows);
+  renderBirthdayWeekNotice(rows);
+  actualizarTotal(rows.length);
+  syncVisibleCount();
+  hasLoadedStudentData = true;
+  isLoadingStudentData = false;
+
+  if (historicalDirectoryState === 'loading') {
+    setStatus(`Firebase sincronizado (${PRIMARY_STUDENTS.length} inscripciones). Completando directorio histórico…`);
+  } else if (historicalDirectoryState === 'failed') {
+    setStatus(`Firebase sincronizado (${PRIMARY_STUDENTS.length} inscripciones). El complemento histórico no pudo cargarse.`);
+  } else if (historicalDirectoryState === 'ready') {
+    const pending = Number(historicalDirectoryCounts.pendingIdentityReview || 0);
+    const reviewText = pending ? `; ${pending} identidades marcadas para revisión` : '';
+    const substitutionText = substitutedCorruptPrimaryCount
+      ? `; ${substitutedCorruptPrimaryCount} ${substitutedCorruptPrimaryCount === 1
+        ? 'importación corrupta sustituida visualmente'
+        : 'importaciones corruptas sustituidas visualmente'}`
+      : '';
+    setStatus(`Directorio conectado: ${visiblePrimaryStudents.length} inscripciones visibles + ${HISTORICAL_STUDENTS.length} históricos${reviewText}${substitutionText} ✅`);
+  } else {
+    setStatus(`Datos sincronizados con Firebase (${PRIMARY_STUDENTS.length} registros) ✅`);
+  }
+}
+
+function stopStudentSubscription() {
+  if (typeof unsubscribeStudents === 'function') unsubscribeStudents();
+  unsubscribeStudents = null;
+}
+
+function studentRecordToRow(student) {
+  return [student.id, ...FIRESTORE_FIELDS.map(([key]) => formatFirestoreValue(getStudentFieldValue(student, key)))];
+}
+
+function getStudentFieldValue(student, fieldKey) {
+  if (fieldKey === 'recordOrigin') {
+    return student?.recordOrigin || (student?._recordOrigin === 'historical'
+      ? 'Histórico consolidado (Bitácoras/HUB) · solo lectura'
+      : 'Inscripción Firebase');
+  }
+  const aliases = FIRESTORE_FIELD_ALIASES[fieldKey] || [fieldKey];
+  for (const key of aliases) {
+    const value = getNestedFieldValue(student, key);
+    if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+  }
+  return '';
+}
+
+function getStudentFieldSource(student, fieldKey) {
+  const aliases = FIRESTORE_FIELD_ALIASES[fieldKey] || [fieldKey];
+  return aliases.find((key) => !key.includes('.') && student?.[key] !== undefined) || aliases.find((key) => !key.includes('.')) || aliases[0];
+}
+
+function getNestedFieldValue(record, path) {
+  return String(path || '').split('.').reduce((value, key) => value?.[key], record);
+}
+
+function formatFirestoreValue(value) {
+  if (value && typeof value.toDate === 'function') return value.toDate().toLocaleDateString('es-CO');
+  if (value instanceof Date) return value.toLocaleDateString('es-CO');
+  if (Array.isArray(value)) return value.join(', ');
+  if (value && typeof value === 'object') return '';
+  const text = value == null ? '' : String(value);
+  return text.length > MAX_SAFE_DISPLAY_LENGTH ? '' : text;
+}
+
+function hasUnsafeDisplayValue(record) {
+  return Object.values(record || {}).some((value) =>
+    typeof value === 'string' && value.length > MAX_SAFE_DISPLAY_LENGTH
+  );
 }
 
 function parseTSV(text) {
@@ -849,6 +1023,16 @@ function parseTSV(text) {
    Construcción de DataTable
 ========================= */
 function construirTabla(headers, data) {
+  if (dataTable) {
+    try {
+      dataTable.clear();
+      dataTable.destroy(false);
+    } catch (error) {
+      console.warn(error);
+    }
+    dataTable = null;
+  }
+
   HEADERS = headers.slice();
   HEADER_INDEX = buildHeaderIndex(headers);
   EMPTY_COLUMN_INDEXES = detectCompletelyEmptyColumns(headers, data);
@@ -863,11 +1047,6 @@ function construirTabla(headers, data) {
       headRow.appendChild(th);
     });
     thead.appendChild(headRow);
-  }
-
-  if (dataTable) {
-    try { dataTable.destroy(true); } catch (e) { console.warn(e); }
-    dataTable = null;
   }
 
   const columnDefs = [
@@ -888,6 +1067,19 @@ function construirTabla(headers, data) {
         const raw = String(data ?? '').trim();
         if (type !== 'display') return raw;
         return renderEstadoBadge(raw);
+      }
+    });
+  }
+
+  const originCol = HEADERS.indexOf('Origen del registro');
+  if (originCol > -1) {
+    columnDefs.push({
+      targets: originCol,
+      render: function (data, type) {
+        const raw = String(data ?? '').trim();
+        if (type !== 'display') return raw;
+        const historical = normalizeText(raw).includes('historico consolidado');
+        return `<span class="origin-badge ${historical ? 'is-historical' : 'is-primary'}">${escapeHtml(raw)}</span>`;
       }
     });
   }
@@ -1034,6 +1226,9 @@ function initDrawer() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeDrawer();
   });
+
+  document.getElementById('btnEditStudent')?.addEventListener('click', startStudentEdit);
+  document.getElementById('btnDeleteStudent')?.addEventListener('click', deleteCurrentStudent);
 }
 
 function wireRowClick() {
@@ -1059,13 +1254,18 @@ function openDrawerFromRow(rowData) {
   const telActions = document.getElementById(DRAWER_IDS.pTelActions);
   const telAcActions = document.getElementById(DRAWER_IDS.pTelAcudienteActions);
   const fieldsEl = document.getElementById(DRAWER_IDS.fields);
+  currentDrawerRecord = rowToStudentRecord(rowData);
+  const adminActions = document.getElementById('drawerAdminActions');
+  const canEditCurrent = Boolean(window.MusicalaAuth?.canEdit?.() && !currentDrawerRecord.raw?._readOnly);
+  if (adminActions) adminActions.hidden = !canEditCurrent;
 
-  const nombre = getBestFieldValue(rowData, HEADER_ALIASES.nombre, [colLetterToDtIndex('A')]);
-  const telefono = getBestFieldValue(rowData, HEADER_ALIASES.telefono, [colLetterToDtIndex('K')]);
-  const acudiente = getBestFieldValue(rowData, HEADER_ALIASES.acudiente, [colLetterToDtIndex('U')]);
-  const telefonoAcudiente = getBestFieldValue(rowData, HEADER_ALIASES.telefonoAcudiente, [colLetterToDtIndex('W')]);
-  const estado = getBestFieldValue(rowData, HEADER_ALIASES.estado, [colLetterToDtIndex('B')]);
-  const fechaInscripcion = getBestFieldValue(rowData, HEADER_ALIASES.fechaInscripcion, [colLetterToDtIndex('AC')]);
+  const nombre = getRowValueForField(rowData, 'studentName');
+  const telefono = getRowValueForField(rowData, 'mobile') || getRowValueForField(rowData, 'phone');
+  const acudiente = getRowValueForField(rowData, 'guardianName');
+  const telefonoAcudiente = getRowValueForField(rowData, 'guardianMobile') || getRowValueForField(rowData, 'guardianPhone');
+  const estado = getRowValueForField(rowData, 'status');
+  const fechaInscripcion = getRowValueForField(rowData, 'createdAt');
+  const recordOrigin = getRowValueForField(rowData, 'recordOrigin');
 
   const displayName = isMeaningfulValue(nombre)
     ? String(nombre).trim()
@@ -1077,6 +1277,7 @@ function openDrawerFromRow(rowData) {
     const subtitleParts = [];
     if (isMeaningfulValue(estado)) subtitleParts.push(`Estado: ${String(estado).trim()}`);
     if (isMeaningfulValue(fechaInscripcion)) subtitleParts.push(`Inscripción: ${String(fechaInscripcion).trim()}`);
+    if (isMeaningfulValue(recordOrigin)) subtitleParts.push(String(recordOrigin).trim());
     subtitleEl.textContent = subtitleParts.length ? subtitleParts.join(' · ') : 'Ficha del estudiante';
   }
 
@@ -1128,6 +1329,78 @@ function openDrawerFromRow(rowData) {
   document.body.style.overflow = 'hidden';
 }
 
+function getRowValueForField(rowData, fieldKey) {
+  const label = FIRESTORE_FIELDS.find(([key]) => key === fieldKey)?.[1];
+  const index = label ? HEADERS.indexOf(label) : -1;
+  return index > -1 && isMeaningfulValue(rowData[index]) ? String(rowData[index]).trim() : '';
+}
+
+function rowToStudentRecord(rowData) {
+  const raw = STUDENT_RECORDS_BY_ID.get(rowData[0]) || {};
+  const data = {};
+  FIRESTORE_FIELDS.forEach(([key]) => { data[key] = formatFirestoreValue(getStudentFieldValue(raw, key)); });
+  return { id: rowData[0], raw, data };
+}
+
+function startStudentEdit() {
+  if (!window.MusicalaAuth?.canEdit?.() || !currentDrawerRecord || currentDrawerRecord.raw?._readOnly) {
+    setStatus('Los registros históricos consolidados son de solo lectura.');
+    return;
+  }
+  const fieldsEl = document.getElementById(DRAWER_IDS.fields);
+  if (!fieldsEl) return;
+  fieldsEl.innerHTML = '<div class="drawer__editActions"><button id="btnSaveStudentEdit" class="btn" type="button">Guardar cambios</button><button id="btnCancelStudentEdit" class="btn btn-ghost" type="button">Cancelar</button></div>';
+  FIRESTORE_FIELDS.filter(([key]) => !['createdAt', 'recordOrigin'].includes(key) && !RIP_MANAGED_FIELDS.has(key)).forEach(([key, label]) => {
+    const row = document.createElement('div');
+    row.className = 'kv__row';
+    row.innerHTML = `<dt class="kv__k">${escapeHtml(label)}</dt><dd class="kv__v"><input class="kv__input" data-student-field="${escapeHtml(key)}" value="${escapeHtml(currentDrawerRecord.data[key])}"></dd>`;
+    fieldsEl.appendChild(row);
+  });
+  document.getElementById('btnSaveStudentEdit')?.addEventListener('click', saveStudentEdit);
+  document.getElementById('btnCancelStudentEdit')?.addEventListener('click', () => openDrawerFromRow(studentRecordToRow({ id: currentDrawerRecord.id, ...currentDrawerRecord.data })));
+}
+
+async function saveStudentEdit() {
+  if (!window.MusicalaAuth?.canEdit?.() || !currentDrawerRecord || currentDrawerRecord.raw?._readOnly) return;
+  const changes = {};
+  document.querySelectorAll('[data-student-field]').forEach((input) => {
+    const key = input.dataset.studentField;
+    const value = input.value.trim();
+    if (value !== String(currentDrawerRecord.data[key] ?? '')) {
+      changes[getStudentFieldSource(currentDrawerRecord.raw, key)] = value;
+    }
+  });
+  if (!Object.keys(changes).length) {
+    setStatus('No hay cambios para guardar.');
+    return;
+  }
+  try {
+    await window.MusicalaAuth.updateStudent(currentDrawerRecord.id, changes);
+    setStatus('Registro actualizado en Firebase ✅');
+    closeDrawer();
+  } catch (error) {
+    console.error('No se pudo actualizar el registro:', error);
+    setStatus('No se pudo actualizar el registro. Verifica tus permisos.');
+  }
+}
+
+async function deleteCurrentStudent() {
+  if (!window.MusicalaAuth?.canEdit?.() || !currentDrawerRecord || currentDrawerRecord.raw?._readOnly) {
+    setStatus('Los registros históricos consolidados no se eliminan desde esta lista.');
+    return;
+  }
+  const name = currentDrawerRecord.data.studentName || 'este registro';
+  if (!window.confirm(`¿Eliminar definitivamente a ${name}? Esta acción no se puede deshacer.`)) return;
+  try {
+    await window.MusicalaAuth.deleteStudent(currentDrawerRecord.id);
+    closeDrawer();
+    setStatus('Registro eliminado definitivamente de Firebase ✅');
+  } catch (error) {
+    console.error('No se pudo eliminar el registro:', error);
+    setStatus('No se pudo eliminar el registro. Verifica tus permisos.');
+  }
+}
+
 function setPrimaryValue(id, value, alwaysVisible = false) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -1151,6 +1424,7 @@ function closeDrawer() {
   drawer.classList.remove('is-open');
   drawer.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
+  currentDrawerRecord = null;
 }
 
 /* =========================
